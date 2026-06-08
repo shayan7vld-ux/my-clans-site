@@ -89,6 +89,7 @@ TRANSLATIONS = {
         "leader": "Leader",
         "members": "Members",
         "donated": "Donated",
+        "donated_today": "Today",
         "received": "Received",
         "score": "Score",
         "csv_download": "📥 Download CSV",
@@ -103,11 +104,14 @@ TRANSLATIONS = {
         "war_wins": "War Wins",
         "members_tab": "👥 Members",
         "war_tab": "⚔️ War League",
+        "regular_war_tab": "⚔️ Regular War",
         "capital_tab": "🏛️ Capital",
         "player_profile": "Player Profile",
         "close_profile": "Close Profile",
         "war_not_found": "This clan is not currently in a war league.",
         "war_error": "Error fetching war league data.",
+        "regular_war_not_found": "No active regular war.",
+        "regular_war_history": "Previous Wars",
         "capital_not_found": "Capital data not available.",
         "capital_error": "Error fetching capital data.",
         "record_alert": "🔥 New highest donation record: {amount:,}!",
@@ -134,6 +138,9 @@ TRANSLATIONS = {
         "war_clan_destruction": "💥 Destruction",
         "capital_hall_level": "Capital Hall Level",
         "capital_league": "Capital League",
+        "daily_stats_backup": "🔄 Daily Stats Backup",
+        "download_daily": "📥 Download Daily Stats",
+        "upload_daily": "📤 Upload Daily Stats (JSON)",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -175,6 +182,7 @@ TRANSLATIONS = {
         "leader": "لیدر",
         "members": "اعضا",
         "donated": "اهدا",
+        "donated_today": "امروز",
         "received": "دریافت",
         "score": "امتیاز",
         "csv_download": "📥 دانلود CSV",
@@ -189,11 +197,14 @@ TRANSLATIONS = {
         "war_wins": "پیروزی در جنگ",
         "members_tab": "👥 اعضا",
         "war_tab": "⚔️ لیگ جنگ",
+        "regular_war_tab": "⚔️ وار عادی",
         "capital_tab": "🏛️ کپیتال",
         "player_profile": "پروفایل بازیکن",
         "close_profile": "بستن پروفایل",
         "war_not_found": "این کلن در حال حاضر در لیگ جنگ نیست.",
         "war_error": "خطا در دریافت اطلاعات لیگ جنگ.",
+        "regular_war_not_found": "وار عادی فعالی وجود ندارد.",
+        "regular_war_history": "وارهای قبلی",
         "capital_not_found": "اطلاعات کپیتال در دسترس نیست.",
         "capital_error": "خطا در دریافت اطلاعات کپیتال.",
         "record_alert": "🔥 رکورد جدید بالاترین اهدا: {amount:,}!",
@@ -220,6 +231,9 @@ TRANSLATIONS = {
         "war_clan_destruction": "💥 تخریب",
         "capital_hall_level": "سطح تالار کپیتال",
         "capital_league": "لیگ کپیتال",
+        "daily_stats_backup": "🔄 پشتیبان آمار روزانه",
+        "download_daily": "📥 دانلود آمار روزانه",
+        "upload_daily": "📤 بارگذاری آمار روزانه (JSON)",
     }
 }
 
@@ -296,6 +310,53 @@ if 'lang' not in st.session_state:
     st.session_state.lang = "en"
 if 'show_about' not in st.session_state:
     st.session_state.show_about = False
+
+# ------------------------------
+# Daily Stats (for today's donations of clans AND players)
+# ------------------------------
+DAILY_STATS_FILE = "daily_stats.json"
+
+def load_daily_stats():
+    if os.path.exists(DAILY_STATS_FILE):
+        with open(DAILY_STATS_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_daily_stats(stats):
+    with open(DAILY_STATS_FILE, "w") as f:
+        json.dump(stats, f)
+
+def get_today_str():
+    return datetime.date.today().isoformat()
+
+def get_yesterday_str():
+    yesterday = datetime.date.today() - datetime.timedelta(days=1)
+    return yesterday.isoformat()
+
+# ------------------------------
+# War History File
+# ------------------------------
+WAR_HISTORY_FILE = "war_history.json"
+
+def load_war_history():
+    if os.path.exists(WAR_HISTORY_FILE):
+        with open(WAR_HISTORY_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_war_history(history):
+    with open(WAR_HISTORY_FILE, "w") as f:
+        json.dump(history, f)
+
+def add_war_to_history(clan_tag, war_data):
+    history = load_war_history()
+    if clan_tag not in history:
+        history[clan_tag] = []
+    # جلوگیری از ذخیرهٔ تکراری (با بررسی war tag)
+    war_tag = war_data.get("warTag")
+    if not any(w.get("warTag") == war_tag for w in history[clan_tag]):
+        history[clan_tag].append(war_data)
+    save_war_history(history)
 
 # ------------------------------
 # Clan Tags Persistent Storage (empty default)
@@ -425,7 +486,7 @@ st.markdown("""
 }
 .dancer { font-size: 45px; display: inline-block; animation: dance 0.5s infinite alternate ease-in-out; text-align: center; width: 100%; margin-top: 10px; }
 .table-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.08); margin-top: 15px; }
-.custom-table { width: 100%; min-width: 650px; border-collapse: collapse; }
+.custom-table { width: 100%; min-width: 800px; border-collapse: collapse; }
 .custom-table th { padding: 12px 8px; font-weight: bold; text-align: center; font-size: 14px; }
 .custom-table td { padding: 10px 8px; text-align: center; font-size: 14px; }
 .glass-card { backdrop-filter: blur(20px); border-radius: 16px; padding: 20px; margin-bottom: 25px; }
@@ -441,7 +502,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ------------------------------
-# Parse API Data (حالا با اطلاعات کپیتال)
+# Parse API Data (with daily stats for clans and players)
 # ------------------------------
 all_clans_list = []
 all_players_list = []
@@ -467,6 +528,35 @@ for tag, data in st.session_state.cached_clan_data.items():
             "role": m['role'].capitalize(), "tag": m['tag'], "trophies": m.get('trophies', 0),
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
+
+# ---- محاسبه اهدای امروز با تاریخچه (کلن‌ها و بازیکنان) ----
+daily_stats = load_daily_stats()
+today_str = get_today_str()
+yesterday_str = get_yesterday_str()
+
+yesterday_data = daily_stats.get(yesterday_str, {})
+yesterday_clans = yesterday_data.get("clans", {})
+yesterday_players = yesterday_data.get("players", {})
+
+today_snapshot = {
+    "clans": {},
+    "players": {}
+}
+
+for clan in all_clans_list:
+    tag = clan['tag']
+    today_snapshot["clans"][tag] = clan['donations']
+    yesterday_total = yesterday_clans.get(tag)
+    clan['donations_today'] = max(0, clan['donations'] - yesterday_total) if yesterday_total is not None else 0
+
+for player in all_players_list:
+    tag = player['tag']
+    today_snapshot["players"][tag] = player['donations']
+    yesterday_total = yesterday_players.get(tag)
+    player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
+
+daily_stats[today_str] = today_snapshot
+save_daily_stats(daily_stats)
 
 if all_clans_list:
     all_clans_list = sorted(all_clans_list, key=lambda x: x['donations'], reverse=True)
@@ -621,6 +711,26 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
+        # --- پشتیبان‌گیری از daily_stats.json ---
+        st.markdown("---")
+        st.subheader(t("daily_stats_backup"))
+        if os.path.exists(DAILY_STATS_FILE):
+            with open(DAILY_STATS_FILE, "r") as f:
+                daily_json = f.read()
+            st.download_button(t("download_daily"), daily_json, file_name="daily_stats.json")
+        else:
+            st.info("No daily stats file yet.")
+        uploaded_daily = st.file_uploader(t("upload_daily"), type="json", key="daily_upload")
+        if uploaded_daily is not None:
+            try:
+                content = uploaded_daily.getvalue().decode()
+                data = json.loads(content)
+                save_daily_stats(data)
+                st.success("Daily stats uploaded successfully!")
+                st.rerun()
+            except:
+                st.error("Invalid daily stats file.")
+
 # ------------------------------
 # Force Refresh Button
 # ------------------------------
@@ -671,7 +781,8 @@ if st.session_state.selected_clan_tag:
         """, unsafe_allow_html=True)
         st.info(t("description", desc=selected_clan['description']))
 
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+        # Metrics row including today's donations
+        m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
         with m_col1:
             st.markdown(f'<div class="glass-metric"><p>{t("total_donated")}</p><h2>{selected_clan["donations"]:,}</h2></div>', unsafe_allow_html=True)
         with m_col2:
@@ -680,8 +791,16 @@ if st.session_state.selected_clan_tag:
             st.markdown(f'<div class="glass-metric" style="border-bottom-color: gold;"><p>{t("performance_score")}</p><h2>{clan_score(selected_clan):,}</h2></div>', unsafe_allow_html=True)
         with m_col4:
             st.markdown(f'<div class="glass-metric" style="border-bottom-color: #45f3ff;"><p>{t("war_wins")}</p><h2>{selected_clan.get("war_wins", 0)}</h2></div>', unsafe_allow_html=True)
+        with m_col5:
+            st.markdown(f'<div class="glass-metric" style="border-bottom-color: #ffaa45;"><p>{t("donated_today")}</p><h2>{selected_clan.get("donations_today", 0):,}</h2></div>', unsafe_allow_html=True)
 
-        tab_overview, tab_war, tab_capital = st.tabs([t("members_tab"), t("war_tab"), t("capital_tab")])
+        # Tabs: Members, Regular War, War League, Capital
+        tab_overview, tab_regular_war, tab_war_league, tab_capital = st.tabs([
+            t("members_tab"),
+            t("regular_war_tab"),
+            t("war_tab"),
+            t("capital_tab")
+        ])
 
         with tab_overview:
             sorted_m = sorted(selected_clan['members_raw'], key=lambda x: x.get('donations', 0), reverse=True)
@@ -696,9 +815,12 @@ if st.session_state.selected_clan_tag:
                 else:
                     st.session_state.selected_player_tag = None
 
-            table_html = f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('name')}</th><th>{t('role')}</th><th>{t('level')}</th><th>🔥 {t('donations')}</th><th>📥 {t('received_col')}</th></tr></thead><tbody>"
+            table_html = f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('name')}</th><th>{t('role')}</th><th>{t('level')}</th><th>🔥 {t('donations')}</th><th>🔥 {t('donated_today')}</th><th>📥 {t('received_col')}</th></tr></thead><tbody>"
             for idx, m in enumerate(sorted_m, 1):
-                table_html += f"<tr><td>{idx}</td><td><a href='?player={m['tag']}' style='color:white; font-weight:bold;'>{m['name']}</a></td><td>{m['role']}</td><td><span class='lvl-badge'>⭐ {m.get('expLevel',0)}</span></td><td style='color:#00ffcc'>{m.get('donations',0):,}</td><td>{m.get('donationsReceived',0):,}</td></tr>"
+                player_tag = m['tag']
+                player_data = next((p for p in all_players_list if p['tag'] == player_tag), None)
+                today_donations = player_data['donations_today'] if player_data and 'donations_today' in player_data else 0
+                table_html += f"<tr><td>{idx}</td><td><a href='?player={player_tag}' style='color:white; font-weight:bold;'>{m['name']}</a></td><td>{m['role']}</td><td><span class='lvl-badge'>⭐ {m.get('expLevel',0)}</span></td><td style='color:#00ffcc'>{m.get('donations',0):,}</td><td style='color:#ffaa45; font-weight:bold;'>{today_donations:,}</td><td>{m.get('donationsReceived',0):,}</td></tr>"
             table_html += "</tbody></table></div>"
             st.markdown(table_html, unsafe_allow_html=True)
 
@@ -709,7 +831,84 @@ if st.session_state.selected_clan_tag:
                     st.query_params.clear()
                     st.rerun()
 
-        with tab_war:
+        # ----- تب Regular War -----
+        with tab_regular_war:
+            st.subheader(t("regular_war_tab"))
+            try:
+                clean = selected_clan['tag'].replace("#", "%23")
+                war_url = f"https://cocproxy.royaleapi.dev/v1/clans/{clean}/currentwar"
+                resp = requests.get(war_url, headers=headers, timeout=5)
+                if resp.status_code == 200:
+                    war_data = resp.json()
+                    state = war_data.get("state", "notInWar")
+                    if state == "notInWar":
+                        st.info(t("regular_war_not_found"))
+                    else:
+                        # نمایش وار جاری یا تمام‌شده
+                        clan = war_data.get("clan", {})
+                        opponent = war_data.get("opponent", {})
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"""
+                            <div class="war-card">
+                                <img src="{clan.get('badgeUrls',{}).get('small','')}" width="30" style="vertical-align:middle">
+                                <span class="war-clan-name">{clan.get('name','Unknown')}</span>
+                                <div class="war-stats">
+                                    <span>⭐ {clan.get('stars',0)}</span>
+                                    <span>{clan.get('destructionPercentage',0):.1f}%</span>
+                                    <span>Attacks: {clan.get('attacks',0)}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with col2:
+                            st.markdown(f"""
+                            <div class="war-card">
+                                <img src="{opponent.get('badgeUrls',{}).get('small','')}" width="30" style="vertical-align:middle">
+                                <span class="war-clan-name">{opponent.get('name','Unknown')}</span>
+                                <div class="war-stats">
+                                    <span>⭐ {opponent.get('stars',0)}</span>
+                                    <span>{opponent.get('destructionPercentage',0):.1f}%</span>
+                                    <span>Attacks: {opponent.get('attacks',0)}</span>
+                                </div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        st.caption(f"State: {state} – War tag: {war_data.get('warTag','?')}")
+                        # ذخیره در تاریخچه اگر وار تمام شده باشد
+                        if state == "warEnded":
+                            # ساخت دیکشنری ساده برای تاریخچه
+                            history_entry = {
+                                "warTag": war_data.get("warTag"),
+                                "clanName": clan.get("name"),
+                                "clanStars": clan.get("stars", 0),
+                                "clanDestruction": clan.get("destructionPercentage", 0),
+                                "opponentName": opponent.get("name"),
+                                "opponentStars": opponent.get("stars", 0),
+                                "opponentDestruction": opponent.get("destructionPercentage", 0),
+                                "date": today_str,
+                                "result": "win" if clan.get("stars", 0) > opponent.get("stars", 0) else "loss" if clan.get("stars", 0) < opponent.get("stars", 0) else "draw"
+                            }
+                            add_war_to_history(selected_clan['tag'], history_entry)
+                else:
+                    st.info(t("regular_war_not_found"))
+            except Exception as e:
+                st.error(t("war_error"))
+
+            # نمایش تاریخچه وارهای قبلی
+            st.subheader(t("regular_war_history"))
+            history = load_war_history()
+            clan_wars = history.get(selected_clan['tag'], [])
+            if clan_wars:
+                # جدول ساده
+                war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></tr></thead><tbody>"
+                for w in reversed(clan_wars[-10:]):  # آخرین ۱۰ وار
+                    war_table += f"<tr><td>{w.get('date','?')}</td><td>{w.get('opponentName','Unknown')}</td><td>{w.get('result','?')}</td><td>⭐ {w.get('clanStars',0)}</td><td>{w.get('clanDestruction',0):.1f}%</td></tr>"
+                war_table += "</tbody></table></div>"
+                st.markdown(war_table, unsafe_allow_html=True)
+            else:
+                st.info("No war history yet.")
+
+        # ----- تب War League (بدون تغییر) -----
+        with tab_war_league:
             try:
                 clean = selected_clan['tag'].replace("#", "%23")
                 war_url = f"https://cocproxy.royaleapi.dev/v1/clans/{clean}/currentwar/leaguegroup"
@@ -767,14 +966,12 @@ if st.session_state.selected_clan_tag:
 
         with tab_capital:
             st.subheader(t("capital_tab"))
-            # Basic Capital Info from clan data
             col1, col2 = st.columns(2)
             with col1:
                 st.metric(t("capital_hall_level"), selected_clan.get('capital_hall_level', 0))
             with col2:
                 st.metric(t("capital_league"), selected_clan.get('capital_league', 'Unranked'))
 
-            # Last Raid Weekend details
             try:
                 clean = selected_clan['tag'].replace("#", "%23")
                 capital_url = f"https://cocproxy.royaleapi.dev/v1/clans/{clean}/capitalraidseasons"
@@ -801,11 +998,11 @@ else:
         filtered_clans = filter_clans(all_clans_list, search_query)
         if filtered_clans:
             csv_download_button(filtered_clans, "clans.csv",
-                                columns=["rank","name","tag","leader","members","donations","received","score"],
-                                headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("received"), t("score")])
-            st.markdown(f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('clan')}</th><th>{t('clan_name_column')}</th><th>{t('leader')}</th><th>{t('members')}</th><th>🔥 {t('donated')}</th><th>📥 {t('received')}</th><th>⭐ {t('score')}</th></tr></thead><tbody>", unsafe_allow_html=True)
+                                columns=["rank","name","tag","leader","members","donations","donations_today","received","score"],
+                                headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("score")])
+            st.markdown(f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('clan')}</th><th>{t('clan_name_column')}</th><th>{t('leader')}</th><th>{t('members')}</th><th>🔥 {t('donated')}</th><th>🔥 {t('donated_today')}</th><th>📥 {t('received')}</th><th>⭐ {t('score')}</th></tr></thead><tbody>", unsafe_allow_html=True)
             for rank, clan in enumerate(filtered_clans, 1):
-                col_r, col_img, col_name, col_ldr, col_mem, col_don, col_rec, col_score = st.columns([1,1,4,2,2,2,2,2])
+                col_r, col_img, col_name, col_ldr, col_mem, col_don, col_today, col_rec, col_score = st.columns([1,1,4,2,2,2,2,2,2])
                 with col_r: st.write(f"**{rank}**")
                 with col_img: st.image(clan['badge'], width=38)
                 with col_name:
@@ -815,6 +1012,7 @@ else:
                 with col_ldr: st.write(clan['leader'])
                 with col_mem: st.write(f"{clan['members']}/50")
                 with col_don: st.write(f"<span style='color:#00ffcc; font-weight:bold;'>{clan['donations']:,}</span>", unsafe_allow_html=True)
+                with col_today: st.write(f"<span style='color:#ffaa45; font-weight:bold;'>{clan.get('donations_today', 0):,}</span>", unsafe_allow_html=True)
                 with col_rec: st.write(f"{clan['received']:,}")
                 with col_score: st.write(f"{clan_score(clan):,}")
                 st.divider()
