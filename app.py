@@ -312,10 +312,16 @@ if 'lang' not in st.session_state:
     st.session_state.lang = "en"
 if 'show_about' not in st.session_state:
     st.session_state.show_about = False
+if 'sheets_data' not in st.session_state:
+    st.session_state.sheets_data = None
+if 'last_sheets_refresh' not in st.session_state:
+    st.session_state.last_sheets_refresh = 0
 
 # ------------------------------
-# Google Sheets helpers (با کش برای جلوگیری از خطای quota)
+# Google Sheets helpers with smart caching
 # ------------------------------
+SHEETS_REFRESH_INTERVAL = 60  # seconds
+
 @st.cache_resource
 def get_gsheet_client():
     try:
@@ -341,18 +347,72 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
-@st.cache_data(ttl=120)
-def load_clan_tags_sheets():
+def refresh_sheets_data():
+    """Read all needed data from Google Sheets once and cache in session state."""
+    sh = get_spreadsheet()
+    if sh is None:
+        return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+    data = {}
     try:
-        sh = get_spreadsheet()
-        if sh is None: return []
         try:
             ws = sh.worksheet("ClanTags")
         except:
             ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
-        tags = ws.col_values(1)
-        return [t.strip() for t in tags if t.strip()]
-    except: return []
+        data['clan_tags'] = [t.strip() for t in ws.col_values(1) if t.strip()]
+    except:
+        data['clan_tags'] = []
+
+    try:
+        try:
+            ws = sh.worksheet("DailyStats")
+        except:
+            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+        val = ws.acell('A1').value
+        data['daily_stats'] = json.loads(val) if val else {}
+    except:
+        data['daily_stats'] = {}
+
+    try:
+        try:
+            ws = sh.worksheet("MemberSnapshots")
+        except:
+            ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
+        val = ws.acell('A1').value
+        data['member_snaps'] = json.loads(val) if val else {}
+    except:
+        data['member_snaps'] = {}
+
+    try:
+        try:
+            ws = sh.worksheet("WarHistory")
+        except:
+            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+        val = ws.acell('A1').value
+        data['war_history'] = json.loads(val) if val else {}
+    except:
+        data['war_history'] = {}
+
+    return data
+
+def get_sheets_data():
+    now = time.time()
+    if (st.session_state.sheets_data is None or 
+        (now - st.session_state.last_sheets_refresh) > SHEETS_REFRESH_INTERVAL):
+        st.session_state.sheets_data = refresh_sheets_data()
+        st.session_state.last_sheets_refresh = now
+    return st.session_state.sheets_data
+
+def load_clan_tags_sheets():
+    return get_sheets_data()['clan_tags']
+
+def load_daily_stats_sheets():
+    return get_sheets_data()['daily_stats']
+
+def load_member_snapshot_sheets():
+    return get_sheets_data()['member_snaps']
+
+def load_war_history_sheets():
+    return get_sheets_data()['war_history']
 
 def save_clan_tags_sheets(tags):
     try:
@@ -363,20 +423,9 @@ def save_clan_tags_sheets(tags):
         ws.clear()
         if tags:
             ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
+        if st.session_state.sheets_data is not None:
+            st.session_state.sheets_data['clan_tags'] = tags
     except: pass
-    # پاک کردن کش بعد از ذخیره
-    load_clan_tags_sheets.clear()
-
-@st.cache_data(ttl=120)
-def load_daily_stats_sheets():
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return {}
-        try: ws = sh.worksheet("DailyStats")
-        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1"); return {}
-        val = ws.acell('A1').value
-        return json.loads(val) if val else {}
-    except: return {}
 
 def save_daily_stats_sheets(stats):
     try:
@@ -385,19 +434,9 @@ def save_daily_stats_sheets(stats):
         try: ws = sh.worksheet("DailyStats")
         except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
         ws.update('A1', [[json.dumps(stats)]])
+        if st.session_state.sheets_data is not None:
+            st.session_state.sheets_data['daily_stats'] = stats
     except: pass
-    load_daily_stats_sheets.clear()
-
-@st.cache_data(ttl=120)
-def load_member_snapshot_sheets():
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return {}
-        try: ws = sh.worksheet("MemberSnapshots")
-        except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1"); return {}
-        val = ws.acell('A1').value
-        return json.loads(val) if val else {}
-    except: return {}
 
 def save_member_snapshot_sheets(snaps):
     try:
@@ -406,19 +445,9 @@ def save_member_snapshot_sheets(snaps):
         try: ws = sh.worksheet("MemberSnapshots")
         except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
         ws.update('A1', [[json.dumps(snaps)]])
+        if st.session_state.sheets_data is not None:
+            st.session_state.sheets_data['member_snaps'] = snaps
     except: pass
-    load_member_snapshot_sheets.clear()
-
-@st.cache_data(ttl=120)
-def load_war_history_sheets():
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return {}
-        try: ws = sh.worksheet("WarHistory")
-        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1"); return {}
-        val = ws.acell('A1').value
-        return json.loads(val) if val else {}
-    except: return {}
 
 def save_war_history_sheets(history):
     try:
@@ -427,8 +456,9 @@ def save_war_history_sheets(history):
         try: ws = sh.worksheet("WarHistory")
         except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
         ws.update('A1', [[json.dumps(history)]])
+        if st.session_state.sheets_data is not None:
+            st.session_state.sheets_data['war_history'] = history
     except: pass
-    load_war_history_sheets.clear()
 
 # ------------------------------
 # Clan Tags from Google Sheets
@@ -1129,7 +1159,6 @@ else:
         else:
             st.info(t("no_clan_found"))
 
-    # (بقیه تب‌ها بدون تغییر)
     with tab2:
         all_players = sorted(all_players_list, key=lambda x: x['donations'], reverse=True)
         filtered_players = filter_players(all_players, search_query)[:100]
