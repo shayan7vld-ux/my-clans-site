@@ -21,7 +21,6 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ------------------------------
 st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="expanded")
 
-# ---------- کلید API فقط از Secrets ----------
 try:
     API_KEY = st.secrets["COC_API_KEY"]
 except KeyError:
@@ -98,7 +97,7 @@ TRANSLATIONS = {
         "donated": "Donated",
         "donated_today": "Today",
         "received": "Received",
-        "score": "Score",
+        "lost": "Lost",
         "csv_download": "📥 Download CSV",
         "no_clan_found": "No clan found with these criteria.",
         "no_player_found": "No player found.",
@@ -107,7 +106,6 @@ TRANSLATIONS = {
         "description": "📋 **Description:** {desc}",
         "total_donated": "Total Donated",
         "total_received": "Total Received",
-        "performance_score": "Performance Score",
         "war_wins": "War Wins",
         "members_tab": "👥 Members",
         "war_tab": "⚔️ War League",
@@ -133,7 +131,6 @@ TRANSLATIONS = {
         "level": "Level",
         "donations": "Donated",
         "received_col": "Received",
-        "score_col": "Score",
         "language_select": "Language",
         "about_title": "📦 About Us",
         "about_creators": "Creators",
@@ -191,7 +188,7 @@ TRANSLATIONS = {
         "donated": "اهدا",
         "donated_today": "امروز",
         "received": "دریافت",
-        "score": "امتیاز",
+        "lost": "از دست رفته",
         "csv_download": "📥 دانلود CSV",
         "no_clan_found": "کلنی با این مشخصات یافت نشد.",
         "no_player_found": "بازیکنی پیدا نشد.",
@@ -200,7 +197,6 @@ TRANSLATIONS = {
         "description": "📋 **توضیحات:** {desc}",
         "total_donated": "کل اهدا",
         "total_received": "کل دریافت",
-        "performance_score": "امتیاز عملکرد",
         "war_wins": "پیروزی در جنگ",
         "members_tab": "👥 اعضا",
         "war_tab": "⚔️ لیگ جنگ",
@@ -226,7 +222,6 @@ TRANSLATIONS = {
         "level": "سطح",
         "donations": "اهدا",
         "received_col": "دریافت",
-        "score_col": "امتیاز",
         "language_select": "زبان",
         "about_title": "📦 درباره ما",
         "about_creators": "سازندگان",
@@ -324,7 +319,7 @@ if 'show_about' not in st.session_state:
 @st.cache_resource
 def get_gsheet_client():
     try:
-        creds_dict = st.secrets["gcp_service_account"]   # TOML dict, not a JSON string
+        creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(
             creds_dict,
             ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -339,7 +334,6 @@ def get_spreadsheet():
     if client is None:
         return None
     try:
-        # 👇 شناسهٔ مستقیم جایگزین شده
         sheet_id = "1_OOYWwm9HQvgv4Q4fIiE4CtEGKHHUjGPxLH6Qb5tnTE"
         return client.open_by_key(sheet_id)
     except Exception as e:
@@ -388,6 +382,25 @@ def save_daily_stats_sheets(stats):
         ws.update('A1', [[json.dumps(stats)]])
     except: pass
 
+def load_member_snapshot_sheets():
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return {}
+        try: ws = sh.worksheet("MemberSnapshots")
+        except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1"); return {}
+        val = ws.acell('A1').value
+        return json.loads(val) if val else {}
+    except: return {}
+
+def save_member_snapshot_sheets(snaps):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try: ws = sh.worksheet("MemberSnapshots")
+        except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
+        ws.update('A1', [[json.dumps(snaps)]])
+    except: pass
+
 def load_war_history_sheets():
     try:
         sh = get_spreadsheet()
@@ -408,7 +421,7 @@ def save_war_history_sheets(history):
     except: pass
 
 # ------------------------------
-# Clan Tags from Google Sheets (initial load)
+# Clan Tags from Google Sheets
 # ------------------------------
 if 'clan_tags' not in st.session_state:
     st.session_state.clan_tags = load_clan_tags_sheets()
@@ -476,6 +489,10 @@ def get_theme_css():
             margin: 10px 0;
             backdrop-filter: blur(10px);
         }
+        .clan-card {
+            background: rgba(255,255,255,0.6) !important;
+            border: 1px solid rgba(0,0,0,0.1) !important;
+        }
         .war-card h4 { margin-top: 0; }
         .war-clan-name { font-weight: bold; }
         .war-stats { display: flex; justify-content: space-between; }
@@ -504,6 +521,10 @@ def get_theme_css():
             margin: 10px 0;
             backdrop-filter: blur(10px);
         }
+        .clan-card {
+            background: rgba(255,255,255,0.05) !important;
+            border: 1px solid rgba(255,255,255,0.1) !important;
+        }
         .war-card h4 { color: #ffaa45; margin-top: 0; }
         .war-clan-name { font-weight: bold; color: #f0f6fc; }
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
@@ -526,12 +547,33 @@ st.markdown("""
 .custom-table td { padding: 10px 8px; text-align: center; font-size: 14px; }
 .glass-card { backdrop-filter: blur(20px); border-radius: 16px; padding: 20px; margin-bottom: 25px; }
 .glass-metric { backdrop-filter: blur(10px); border-radius: 12px; padding: 15px; text-align: center; border-bottom: 3px solid #45f3ff; }
+.clan-card {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 12px;
+    border-radius: 16px;
+    backdrop-filter: blur(20px);
+    transition: all 0.2s;
+}
+.clan-card:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+}
+.clan-card a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+    flex-grow: 1;
+}
 @media (max-width: 768px) {
     .header-title { font-size: 28px; }
     .update-box { font-size: 12px; padding: 6px 12px; }
     .dancer { font-size: 32px; }
     .custom-table th, .custom-table td { font-size: 12px; padding: 8px 4px; }
     .glass-metric h2 { font-size: 20px; }
+    .clan-card { flex-wrap: wrap; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -573,10 +615,7 @@ yesterday_data = daily_stats.get(yesterday_str, {})
 yesterday_clans = yesterday_data.get("clans", {})
 yesterday_players = yesterday_data.get("players", {})
 
-today_snapshot = {
-    "clans": {},
-    "players": {}
-}
+today_snapshot = {"clans": {}, "players": {}}
 
 for clan in all_clans_list:
     tag = clan['tag']
@@ -590,6 +629,35 @@ for player in all_players_list:
     yesterday_total = yesterday_players.get(tag)
     player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
 
+# ---- محاسبه Lost انباشته فصلی ----
+member_snaps = load_member_snapshot_sheets()
+new_snaps = {}
+season_lost = daily_stats.get("season_lost", {})   # dict clan_tag -> cumulative lost
+
+for clan in all_clans_list:
+    tag = clan['tag']
+    current_members = {m['tag']: m['donations'] for m in clan['members_raw']}
+    last_members = member_snaps.get(tag, {})
+
+    # بازیکنانی که بودن ولی الان نیستن
+    left_players = set(last_members.keys()) - set(current_members.keys())
+    new_lost = sum(last_members[p] for p in left_players)
+
+    # تشخیص پایان فصل: اگر اهدای امروز کمتر از نصف دیروز باشد
+    yesterday_don = yesterday_clans.get(tag)
+    if yesterday_don is not None and yesterday_don > 0 and clan['donations'] < yesterday_don * 0.5:
+        # ریست فصل
+        season_lost[tag] = 0
+    else:
+        # اضافه کردن خروج‌های جدید به Lost فصل
+        season_lost[tag] = season_lost.get(tag, 0) + new_lost
+
+    clan['lost_season'] = season_lost[tag]
+    new_snaps[tag] = current_members
+
+# ذخیره اسنپ‌شات اعضا و season_lost جدید
+save_member_snapshot_sheets(new_snaps)
+daily_stats["season_lost"] = season_lost
 daily_stats[today_str] = today_snapshot
 save_daily_stats_sheets(daily_stats)
 
@@ -605,14 +673,12 @@ if current_max > st.session_state.max_donations_seen:
 # Helper functions (filter, etc.)
 # ------------------------------
 def filter_clans(clan_list, query):
-    if not query:
-        return clan_list
+    if not query: return clan_list
     q = query.lower()
     return [c for c in clan_list if q in c['name'].lower() or q in c['tag'].lower()]
 
 def filter_players(player_list, query):
-    if not query:
-        return player_list
+    if not query: return player_list
     q = query.lower()
     return [p for p in player_list if q in p['name'].lower() or q in p['tag'].lower()]
 
@@ -634,10 +700,6 @@ def csv_download_button(data, filename, columns, headers):
     for row in data:
         writer.writerow([row.get(col, "") for col in columns])
     st.download_button(t("csv_download"), output.getvalue(), file_name=filename, mime="text/csv")
-
-def clan_score(clan):
-    ratio = clan['donations'] / (clan['received'] + 1)
-    return int(clan['donations'] * (1 + ratio))
 
 def add_war_to_history_sheets(clan_tag, war_data):
     history = load_war_history_sheets()
@@ -727,8 +789,7 @@ with st.sidebar:
         st.markdown(f"**{t('tracked_clans')}**")
         for i, tag in enumerate(st.session_state.clan_tags):
             col1, col2 = st.columns([4, 1])
-            with col1:
-                st.write(tag)
+            with col1: st.write(tag)
             with col2:
                 if st.button(t("del_btn"), key=f"del_{i}"):
                     st.session_state.clan_tags.pop(i)
@@ -754,7 +815,6 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
-        # Backup daily stats from Sheets (still possible)
         st.subheader(t("daily_stats_backup"))
         if st.button(t("download_daily")):
             stats = load_daily_stats_sheets()
@@ -825,11 +885,11 @@ if st.session_state.selected_clan_tag:
         with m_col2:
             st.markdown(f'<div class="glass-metric" style="border-bottom-color: #c5a1ff;"><p>{t("total_received")}</p><h2>{selected_clan["received"]:,}</h2></div>', unsafe_allow_html=True)
         with m_col3:
-            st.markdown(f'<div class="glass-metric" style="border-bottom-color: gold;"><p>{t("performance_score")}</p><h2>{clan_score(selected_clan):,}</h2></div>', unsafe_allow_html=True)
-        with m_col4:
-            st.markdown(f'<div class="glass-metric" style="border-bottom-color: #45f3ff;"><p>{t("war_wins")}</p><h2>{selected_clan.get("war_wins", 0)}</h2></div>', unsafe_allow_html=True)
-        with m_col5:
             st.markdown(f'<div class="glass-metric" style="border-bottom-color: #ffaa45;"><p>{t("donated_today")}</p><h2>{selected_clan.get("donations_today", 0):,}</h2></div>', unsafe_allow_html=True)
+        with m_col4:
+            st.markdown(f'<div class="glass-metric" style="border-bottom-color: #ff6b6b;"><p>{t("lost")}</p><h2>{selected_clan.get("lost_season", 0):,}</h2></div>', unsafe_allow_html=True)
+        with m_col5:
+            st.markdown(f'<div class="glass-metric" style="border-bottom-color: #45f3ff;"><p>{t("war_wins")}</p><h2>{selected_clan.get("war_wins", 0)}</h2></div>', unsafe_allow_html=True)
 
         tab_overview, tab_regular_war, tab_war_league, tab_capital = st.tabs([
             t("members_tab"), t("regular_war_tab"), t("war_tab"), t("capital_tab")
@@ -1023,25 +1083,29 @@ else:
         filtered_clans = filter_clans(all_clans_list, search_query)
         if filtered_clans:
             csv_download_button(filtered_clans, "clans.csv",
-                                columns=["rank","name","tag","leader","members","donations","donations_today","received","score"],
-                                headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("score")])
-            st.markdown(f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('clan')}</th><th>{t('clan_name_column')}</th><th>{t('leader')}</th><th>{t('members')}</th><th>🔥 {t('donated')}</th><th>🔥 {t('donated_today')}</th><th>📥 {t('received')}</th><th>⭐ {t('score')}</th></tr></thead><tbody>", unsafe_allow_html=True)
+                                columns=["rank","name","tag","leader","members","donations","donations_today","received","lost"],
+                                headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("lost")])
             for rank, clan in enumerate(filtered_clans, 1):
-                col_r, col_img, col_name, col_ldr, col_mem, col_don, col_today, col_rec, col_score = st.columns([1,1,4,2,2,2,2,2,2])
-                with col_r: st.write(f"**{rank}**")
-                with col_img: st.image(clan['badge'], width=38)
-                with col_name:
-                    if st.button(f"🛡️ {clan['name']}", key=f"cl_{clan['tag']}", use_container_width=True):
-                        st.session_state.selected_clan_tag = clan['tag']
-                        st.rerun()
-                with col_ldr: st.write(clan['leader'])
-                with col_mem: st.write(f"{clan['members']}/50")
-                with col_don: st.write(f"<span style='color:#00ffcc; font-weight:bold;'>{clan['donations']:,}</span>", unsafe_allow_html=True)
-                with col_today: st.write(f"<span style='color:#ffaa45; font-weight:bold;'>{clan.get('donations_today', 0):,}</span>", unsafe_allow_html=True)
-                with col_rec: st.write(f"{clan['received']:,}")
-                with col_score: st.write(f"{clan_score(clan):,}")
-                st.divider()
-            st.markdown("</tbody></table></div>", unsafe_allow_html=True)
+                card_html = f"""
+                <a href="?clan={clan['tag']}" style="text-decoration: none;">
+                <div class="clan-card">
+                    <div style="font-size: 18px; font-weight: bold; margin-right: 15px; min-width: 30px;">{rank}</div>
+                    <img src="{clan['badge']}" width="45" style="margin-right: 15px;">
+                    <div style="flex-grow: 1;">
+                        <div style="font-size: 18px; font-weight: bold; color: #f0f6fc;">{clan['name']}</div>
+                        <div style="font-size: 12px; color: #8b949e;">{clan['tag']} • 👑 {clan['leader']}</div>
+                        <div style="font-size: 12px; color: #8b949e;">👥 {clan['members']}/50</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 18px; font-weight: bold; color: #00ffcc;">{clan['donations']:,} 🔥</div>
+                        <div style="font-size: 14px; color: #ffaa45;">{clan.get('donations_today', 0):,} 📅</div>
+                        <div style="font-size: 14px; color: #ff6b6b;">{clan['received']:,} 📥</div>
+                        <div style="font-size: 14px; color: #ff4444;">{clan.get('lost_season', 0):,} 📉</div>
+                    </div>
+                </div>
+                </a>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
         else:
             st.info(t("no_clan_found"))
 
@@ -1058,13 +1122,11 @@ else:
                 p_table += f"<tr><td>{idx}</td><td><a href='?player={p['tag']}' style='color:white; font-weight:bold;'>{p['name']}</a></td><td><img src='{p['clan_badge']}' width='20'> {p['clan_name']}</td><td><span class='lvl-badge'>⭐ {p['level']}</span></td><td style='color:#00ffcc'>{p['donations']:,}</td><td>{p['received']:,}</td></tr>"
             p_table += "</tbody></table></div>"
             st.markdown(p_table, unsafe_allow_html=True)
-
             if 'player' in st.query_params:
                 player_tag = st.query_params['player']
                 st.session_state.selected_player_tag = player_tag
                 st.query_params.clear()
                 st.rerun()
-
             if st.session_state.selected_player_tag:
                 player = next((p for p in all_players if p['tag'] == st.session_state.selected_player_tag), None)
                 if player:
@@ -1087,13 +1149,11 @@ else:
                 h_table += f"<tr><td>{idx}</td><td><a href='?player={p['tag']}' style='color:gold; font-weight:bold;'>🏆 {p['name']}</a></td><td><img src='{p['clan_badge']}' width='20'> {p['clan_name']}</td><td><span class='th-badge'>💎 {p['level']}</span></td><td style='color:#00ffcc'>{p['donations']:,}</td></tr>"
             h_table += "</tbody></table></div>"
             st.markdown(h_table, unsafe_allow_html=True)
-
             if 'player' in st.query_params:
                 player_tag = st.query_params['player']
                 st.session_state.selected_player_tag = player_tag
                 st.query_params.clear()
                 st.rerun()
-
             if st.session_state.selected_player_tag:
                 player = next((p for p in all_players_list if p['tag'] == st.session_state.selected_player_tag), None)
                 if player:
