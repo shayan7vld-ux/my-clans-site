@@ -632,30 +632,25 @@ for player in all_players_list:
 # ---- محاسبه Lost انباشته فصلی ----
 member_snaps = load_member_snapshot_sheets()
 new_snaps = {}
-season_lost = daily_stats.get("season_lost", {})   # dict clan_tag -> cumulative lost
+season_lost = daily_stats.get("season_lost", {})
 
 for clan in all_clans_list:
     tag = clan['tag']
     current_members = {m['tag']: m['donations'] for m in clan['members_raw']}
     last_members = member_snaps.get(tag, {})
 
-    # بازیکنانی که بودن ولی الان نیستن
     left_players = set(last_members.keys()) - set(current_members.keys())
     new_lost = sum(last_members[p] for p in left_players)
 
-    # تشخیص پایان فصل: اگر اهدای امروز کمتر از نصف دیروز باشد
     yesterday_don = yesterday_clans.get(tag)
     if yesterday_don is not None and yesterday_don > 0 and clan['donations'] < yesterday_don * 0.5:
-        # ریست فصل
         season_lost[tag] = 0
     else:
-        # اضافه کردن خروج‌های جدید به Lost فصل
         season_lost[tag] = season_lost.get(tag, 0) + new_lost
 
     clan['lost_season'] = season_lost[tag]
     new_snaps[tag] = current_members
 
-# ذخیره اسنپ‌شات اعضا و season_lost جدید
 save_member_snapshot_sheets(new_snaps)
 daily_stats["season_lost"] = season_lost
 daily_stats[today_str] = today_snapshot
@@ -846,6 +841,15 @@ with col_head:
     st.markdown(f'<div class="header-container"><div class="header-title" style="font-size:42px;">{t("title")}</div><div class="update-box">{t("last_update", time=time_string)}</div></div>', unsafe_allow_html=True)
 with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
+
+# ------------------------------
+# پردازش پارامتر clan برای ورود به جزئیات (قبل از روتینگ)
+# ------------------------------
+if 'clan' in st.query_params and not st.session_state.selected_clan_tag:
+    clan_tag = st.query_params['clan']
+    st.session_state.selected_clan_tag = clan_tag
+    st.query_params.clear()
+    st.rerun()
 
 # ------------------------------
 # Routing
@@ -1091,16 +1095,16 @@ else:
                 <div class="clan-card">
                     <div style="font-size: 18px; font-weight: bold; margin-right: 15px; min-width: 30px;">{rank}</div>
                     <img src="{clan['badge']}" width="45" style="margin-right: 15px;">
-                    <div style="flex-grow: 1;">
+                    <div style="flex-grow: 1; margin-right: 20px;">
                         <div style="font-size: 18px; font-weight: bold; color: #f0f6fc;">{clan['name']}</div>
                         <div style="font-size: 12px; color: #8b949e;">{clan['tag']} • 👑 {clan['leader']}</div>
                         <div style="font-size: 12px; color: #8b949e;">👥 {clan['members']}/50</div>
                     </div>
-                    <div style="text-align: right;">
-                        <div style="font-size: 18px; font-weight: bold; color: #00ffcc;">{clan['donations']:,} 🔥</div>
-                        <div style="font-size: 14px; color: #ffaa45;">{clan.get('donations_today', 0):,} 📅</div>
-                        <div style="font-size: 14px; color: #ff6b6b;">{clan['received']:,} 📥</div>
-                        <div style="font-size: 14px; color: #ff4444;">{clan.get('lost_season', 0):,} 📉</div>
+                    <div style="display: flex; align-items: center; gap: 20px; white-space: nowrap;">
+                        <span style="font-size: 18px; font-weight: bold; color: #00ffcc;">{clan['donations']:,} 🔥</span>
+                        <span style="font-size: 14px; color: #ffaa45;">{clan.get('donations_today', 0):,} 📅</span>
+                        <span style="font-size: 14px; color: #ff6b6b;">{clan['received']:,} 📥</span>
+                        <span style="font-size: 14px; color: #ff4444;">{clan.get('lost_season', 0):,} 📉</span>
                     </div>
                 </div>
                 </a>
