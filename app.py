@@ -30,28 +30,14 @@ except KeyError:
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
 # ------------------------------
-# Language System
+# Language System (unchanged)
 # ------------------------------
 LANGUAGES = {
-    "en": "🇺🇸 English",
-    "fa": "🇮🇷 فارسی",
-    "es": "🇪🇸 Español",
-    "fr": "🇫🇷 Français",
-    "de": "🇩🇪 Deutsch",
-    "ar": "🇸🇦 العربية",
-    "tr": "🇹🇷 Türkçe",
-    "ru": "🇷🇺 Русский",
-    "zh": "🇨🇳 中文",
-    "ja": "🇯🇵 日本語",
-    "ko": "🇰🇷 한국어",
-    "pt": "🇧🇷 Português",
-    "it": "🇮🇹 Italiano",
-    "nl": "🇳🇱 Nederlands",
-    "pl": "🇵🇱 Polski",
-    "sv": "🇸🇪 Svenska",
-    "no": "🇳🇴 Norsk",
-    "da": "🇩🇰 Dansk",
-    "fi": "🇫🇮 Suomi",
+    "en": "🇺🇸 English", "fa": "🇮🇷 فارسی", "es": "🇪🇸 Español", "fr": "🇫🇷 Français",
+    "de": "🇩🇪 Deutsch", "ar": "🇸🇦 العربية", "tr": "🇹🇷 Türkçe", "ru": "🇷🇺 Русский",
+    "zh": "🇨🇳 中文", "ja": "🇯🇵 日本語", "ko": "🇰🇷 한국어", "pt": "🇧🇷 Português",
+    "it": "🇮🇹 Italiano", "nl": "🇳🇱 Nederlands", "pl": "🇵🇱 Polski", "sv": "🇸🇪 Svenska",
+    "no": "🇳🇴 Norsk", "da": "🇩🇰 Dansk", "fi": "🇫🇮 Suomi",
 }
 
 TRANSLATIONS = {
@@ -350,7 +336,7 @@ if 'legend_page' not in st.session_state:
 ITEMS_PER_PAGE = 50
 
 # ------------------------------
-# Google Sheets helpers (Row-based storage - no 50k char limit)
+# Google Sheets helpers (robust - no more worksheet creation errors)
 # ------------------------------
 SHEETS_REFRESH_INTERVAL = 300
 
@@ -379,53 +365,54 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
+def get_or_create_worksheet(sh, name, rows=100, cols=1):
+    """برگه را برمی‌گرداند؛ اگر وجود نداشت، ایجاد می‌کند."""
+    try:
+        return sh.worksheet(name)
+    except gspread.exceptions.WorksheetNotFound:
+        try:
+            return sh.add_worksheet(title=name, rows=str(rows), cols=str(cols))
+        except gspread.exceptions.APIError:
+            # ممکن است هم‌زمان ساخته شده باشد
+            return sh.worksheet(name)
+
 def refresh_app_data():
     sh = get_spreadsheet()
     if sh is None:
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
 
-    # تابع کمکی برای خواندن یک برگه در صورت وجود
-    def read_sheet(name):
-        try:
-            ws = sh.worksheet(name)
-            # خواندن تمام سلول‌های ستون اول به صورت یک JSON بزرگ
-            all_rows = ws.col_values(1)
-            if all_rows:
-                return json.loads(all_rows[0]) if all_rows[0] else {}
-        except:
-            pass
-        return {}
-
     data = {}
+    # ClanTags
     try:
-        data['clan_tags'] = [t.strip() for t in sh.worksheet("ClanTags").col_values(1) if t.strip()]
+        ws = get_or_create_worksheet(sh, "ClanTags")
+        tags = ws.col_values(1)
+        data['clan_tags'] = [t.strip() for t in tags if t.strip()]
     except:
-        try:
-            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
-        except:
-            pass
         data['clan_tags'] = []
 
-    data['daily_stats'] = read_sheet("DailyStats")
-    if not data['daily_stats']:
-        try:
-            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
-        except:
-            pass
+    # DailyStats
+    try:
+        ws = get_or_create_worksheet(sh, "DailyStats")
+        val = ws.acell('A1').value
+        data['daily_stats'] = json.loads(val) if val else {}
+    except:
+        data['daily_stats'] = {}
 
-    data['member_snaps'] = read_sheet("MemberSnapshots")
-    if not data['member_snaps']:
-        try:
-            ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
-        except:
-            pass
+    # MemberSnapshots
+    try:
+        ws = get_or_create_worksheet(sh, "MemberSnapshots")
+        val = ws.acell('A1').value
+        data['member_snaps'] = json.loads(val) if val else {}
+    except:
+        data['member_snaps'] = {}
 
-    data['war_history'] = read_sheet("WarHistory")
-    if not data['war_history']:
-        try:
-            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
-        except:
-            pass
+    # WarHistory
+    try:
+        ws = get_or_create_worksheet(sh, "WarHistory")
+        val = ws.acell('A1').value
+        data['war_history'] = json.loads(val) if val else {}
+    except:
+        data['war_history'] = {}
 
     return data
 
@@ -433,32 +420,22 @@ def save_app_data(data):
     sh = get_spreadsheet()
     if sh is None: return
 
-    # ذخیره تگ‌ها در برگهٔ ClanTags
-    try:
-        ws = sh.worksheet("ClanTags")
-    except:
-        ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+    # ClanTags
+    ws = get_or_create_worksheet(sh, "ClanTags")
     ws.clear()
     if data.get('clan_tags'):
         ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']])
 
-    # ذخیره daily_stats در یک سل (هنوز از ۵۰ هزار کاراکتر بیشتر نشده، ولی اگر بشه، به ردیفی تغییر می‌دیم)
-    try:
-        ws = sh.worksheet("DailyStats")
-    except:
-        ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+    # DailyStats
+    ws = get_or_create_worksheet(sh, "DailyStats")
     ws.update('A1', [[json.dumps(data.get('daily_stats', {}))]])
 
-    try:
-        ws = sh.worksheet("MemberSnapshots")
-    except:
-        ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
+    # MemberSnapshots
+    ws = get_or_create_worksheet(sh, "MemberSnapshots")
     ws.update('A1', [[json.dumps(data.get('member_snaps', {}))]])
 
-    try:
-        ws = sh.worksheet("WarHistory")
-    except:
-        ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+    # WarHistory
+    ws = get_or_create_worksheet(sh, "WarHistory")
     ws.update('A1', [[json.dumps(data.get('war_history', {}))]])
 
     st.session_state.app_data = data
@@ -548,7 +525,7 @@ seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
 # ------------------------------
-# Dynamic CSS based on theme
+# Dynamic CSS based on theme (unchanged)
 # ------------------------------
 def get_theme_css():
     if st.session_state.theme == "light":
@@ -797,7 +774,7 @@ def add_war_to_history_sheets(clan_tag, war_data):
 def paginate(items, page_key):
     page = st.session_state.get(page_key, 1)
     total = len(items)
-    total_pages = max(1, -(-total // ITEMS_PER_PAGE))  # ceil division
+    total_pages = max(1, -(-total // ITEMS_PER_PAGE))
     if page < 1:
         st.session_state[page_key] = 1
         page = 1
@@ -816,7 +793,7 @@ def show_pagination(total_pages, page, total, page_key):
                 st.session_state[page_key] = max(1, page - 1)
                 st.rerun()
         with col3:
-            st.write(f"{t('page')} {page} / {total_pages} ({total} {t('name') if 'clan' in page_key else t('name')})")
+            st.write(f"{t('page')} {page} / {total_pages} ({total})")
         with col5:
             if st.button(t("next_page"), key=f"next_{page_key}"):
                 st.session_state[page_key] = min(total_pages, page + 1)
@@ -826,9 +803,7 @@ def show_pagination(total_pages, page, total, page_key):
 # Sidebar
 # ------------------------------
 with st.sidebar:
-    # About section (hidden by default)
     if st.button(t("about_btn"), use_container_width=True):
-        # شمارنده کلیک مخفی برای باز کردن فرم ادمین
         now = time.time()
         if now - st.session_state.last_about_click < 5:
             st.session_state.about_click_count += 1
@@ -840,7 +815,6 @@ with st.sidebar:
             st.session_state.show_admin_login = True
             st.session_state.about_click_count = 0
 
-        # همچنین پنل درباره را باز/بسته کند
         st.session_state.show_about = not st.session_state.show_about
         st.rerun()
 
@@ -879,9 +853,7 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
-    # -----------------------------------------------------------------
-    # بخش مدیریت مخفی
-    # -----------------------------------------------------------------
+    # Admin Panel (hidden)
     if st.session_state.admin_authenticated:
         st.markdown("---")
         st.header(t("admin_panel"))
@@ -941,7 +913,6 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
-        # Full App Backup
         st.subheader(t("full_backup_title"))
         if st.button(t("download_full_backup")):
             full_data = get_app_data()
