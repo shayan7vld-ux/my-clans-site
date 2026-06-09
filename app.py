@@ -312,15 +312,15 @@ if 'lang' not in st.session_state:
     st.session_state.lang = "en"
 if 'show_about' not in st.session_state:
     st.session_state.show_about = False
-if 'sheets_data' not in st.session_state:
-    st.session_state.sheets_data = None
+if 'app_data' not in st.session_state:
+    st.session_state.app_data = None
 if 'last_sheets_refresh' not in st.session_state:
     st.session_state.last_sheets_refresh = 0
 
 # ------------------------------
-# Google Sheets helpers with smart caching
+# Google Sheets helpers (حافظهٔ هوشمند با یک برگهٔ AppData)
 # ------------------------------
-SHEETS_REFRESH_INTERVAL = 60  # seconds
+SHEETS_REFRESH_INTERVAL = 300  # seconds
 
 @st.cache_resource
 def get_gsheet_client():
@@ -347,118 +347,85 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
-def refresh_sheets_data():
-    """Read all needed data from Google Sheets once and cache in session state."""
+def refresh_app_data():
+    """Read all data from the single 'AppData' sheet (one JSON cell)."""
     sh = get_spreadsheet()
     if sh is None:
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
-    data = {}
     try:
         try:
-            ws = sh.worksheet("ClanTags")
+            ws = sh.worksheet("AppData")
         except:
-            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
-        data['clan_tags'] = [t.strip() for t in ws.col_values(1) if t.strip()]
-    except:
-        data['clan_tags'] = []
-
-    try:
-        try:
-            ws = sh.worksheet("DailyStats")
-        except:
-            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+            ws = sh.add_worksheet("AppData", rows="2", cols="1")
+            empty_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+            ws.update('A1', [[json.dumps(empty_data)]])
+            return empty_data
         val = ws.acell('A1').value
-        data['daily_stats'] = json.loads(val) if val else {}
-    except:
-        data['daily_stats'] = {}
+        if val:
+            return json.loads(val)
+        else:
+            empty_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+            ws.update('A1', [[json.dumps(empty_data)]])
+            return empty_data
+    except Exception as e:
+        st.error(f"Error reading AppData: {e}")
+        return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
 
+def save_app_data(data):
+    """Save the data dictionary to the 'AppData' sheet."""
     try:
+        sh = get_spreadsheet()
+        if sh is None: return
         try:
-            ws = sh.worksheet("MemberSnapshots")
+            ws = sh.worksheet("AppData")
         except:
-            ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
-        val = ws.acell('A1').value
-        data['member_snaps'] = json.loads(val) if val else {}
-    except:
-        data['member_snaps'] = {}
+            ws = sh.add_worksheet("AppData", rows="2", cols="1")
+        ws.update('A1', [[json.dumps(data)]])
+        # Update local cache immediately
+        st.session_state.app_data = data
+        st.session_state.last_sheets_refresh = time.time()
+    except Exception as e:
+        st.error(f"Error saving AppData: {e}")
 
-    try:
-        try:
-            ws = sh.worksheet("WarHistory")
-        except:
-            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
-        val = ws.acell('A1').value
-        data['war_history'] = json.loads(val) if val else {}
-    except:
-        data['war_history'] = {}
-
-    return data
-
-def get_sheets_data():
+def get_app_data():
     now = time.time()
-    if (st.session_state.sheets_data is None or 
+    if (st.session_state.app_data is None or 
         (now - st.session_state.last_sheets_refresh) > SHEETS_REFRESH_INTERVAL):
-        st.session_state.sheets_data = refresh_sheets_data()
+        st.session_state.app_data = refresh_app_data()
         st.session_state.last_sheets_refresh = now
-    return st.session_state.sheets_data
+    return st.session_state.app_data
 
 def load_clan_tags_sheets():
-    return get_sheets_data()['clan_tags']
+    return get_app_data().get('clan_tags', [])
 
 def load_daily_stats_sheets():
-    return get_sheets_data()['daily_stats']
+    return get_app_data().get('daily_stats', {})
 
 def load_member_snapshot_sheets():
-    return get_sheets_data()['member_snaps']
+    return get_app_data().get('member_snaps', {})
 
 def load_war_history_sheets():
-    return get_sheets_data()['war_history']
+    return get_app_data().get('war_history', {})
 
 def save_clan_tags_sheets(tags):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try: ws = sh.worksheet("ClanTags")
-        except: ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
-        ws.clear()
-        if tags:
-            ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
-        if st.session_state.sheets_data is not None:
-            st.session_state.sheets_data['clan_tags'] = tags
-    except: pass
+    data = get_app_data()
+    data['clan_tags'] = tags
+    save_app_data(data)
 
 def save_daily_stats_sheets(stats):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try: ws = sh.worksheet("DailyStats")
-        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
-        ws.update('A1', [[json.dumps(stats)]])
-        if st.session_state.sheets_data is not None:
-            st.session_state.sheets_data['daily_stats'] = stats
-    except: pass
+    data = get_app_data()
+    data['daily_stats'] = stats
+    save_app_data(data)
 
 def save_member_snapshot_sheets(snaps):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try: ws = sh.worksheet("MemberSnapshots")
-        except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
-        ws.update('A1', [[json.dumps(snaps)]])
-        if st.session_state.sheets_data is not None:
-            st.session_state.sheets_data['member_snaps'] = snaps
-    except: pass
+    data = get_app_data()
+    data['member_snaps'] = snaps
+    save_app_data(data)
 
 def save_war_history_sheets(history):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try: ws = sh.worksheet("WarHistory")
-        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
-        ws.update('A1', [[json.dumps(history)]])
-        if st.session_state.sheets_data is not None:
-            st.session_state.sheets_data['war_history'] = history
-    except: pass
+    data = get_app_data()
+    data['war_history'] = history
+    save_app_data(data)
 
 # ------------------------------
 # Clan Tags from Google Sheets
@@ -652,7 +619,7 @@ for tag, data in st.session_state.cached_clan_data.items():
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
 
-# ---- محاسبه اهدای امروز با تاریخچه (از Google Sheets) ----
+# ---- Daily stats & Lost calculation (using the unified sheets functions) ----
 daily_stats = load_daily_stats_sheets()
 today_str = datetime.date.today().isoformat()
 yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
@@ -675,7 +642,6 @@ for player in all_players_list:
     yesterday_total = yesterday_players.get(tag)
     player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
 
-# ---- محاسبه Lost انباشته فصلی ----
 member_snaps = load_member_snapshot_sheets()
 new_snaps = {}
 season_lost = daily_stats.get("season_lost", {})
