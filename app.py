@@ -151,6 +151,9 @@ TRANSLATIONS = {
         "upload_full_backup": "📤 Restore Full Backup (JSON)",
         "full_restore_success": "Full backup restored successfully!",
         "full_restore_invalid": "Invalid backup file.",
+        "prev_page": "⬅️ Previous",
+        "next_page": "Next ➡️",
+        "page": "Page",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -248,6 +251,9 @@ TRANSLATIONS = {
         "upload_full_backup": "📤 بازیابی پشتیبان کامل (JSON)",
         "full_restore_success": "پشتیبان کامل با موفقیت بازیابی شد!",
         "full_restore_invalid": "فایل پشتیبان نامعتبر است.",
+        "prev_page": "⬅️ قبلی",
+        "next_page": "بعدی ➡️",
+        "page": "صفحه",
     }
 }
 
@@ -334,9 +340,17 @@ if 'app_data' not in st.session_state:
     st.session_state.app_data = None
 if 'last_sheets_refresh' not in st.session_state:
     st.session_state.last_sheets_refresh = 0
+if 'clan_page' not in st.session_state:
+    st.session_state.clan_page = 1
+if 'player_page' not in st.session_state:
+    st.session_state.player_page = 1
+if 'legend_page' not in st.session_state:
+    st.session_state.legend_page = 1
+
+ITEMS_PER_PAGE = 50
 
 # ------------------------------
-# Google Sheets helpers (unchanged)
+# Google Sheets helpers (Row-based storage - no 50k char limit)
 # ------------------------------
 SHEETS_REFRESH_INTERVAL = 300
 
@@ -365,94 +379,90 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
-def migrate_old_data_to_appdata():
-    sh = get_spreadsheet()
-    if sh is None:
-        return
-    try:
-        try:
-            ws_app = sh.worksheet("AppData")
-            val = ws_app.acell('A1').value
-            if val and json.loads(val):
-                return
-        except gspread.exceptions.WorksheetNotFound:
-            pass
-
-        old_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
-
-        try:
-            ws = sh.worksheet("ClanTags")
-            tags = ws.col_values(1)
-            old_data['clan_tags'] = [t.strip() for t in tags if t.strip()]
-        except:
-            pass
-
-        try:
-            ws = sh.worksheet("DailyStats")
-            val = ws.acell('A1').value
-            old_data['daily_stats'] = json.loads(val) if val else {}
-        except:
-            pass
-
-        try:
-            ws = sh.worksheet("MemberSnapshots")
-            val = ws.acell('A1').value
-            old_data['member_snaps'] = json.loads(val) if val else {}
-        except:
-            pass
-
-        try:
-            ws = sh.worksheet("WarHistory")
-            val = ws.acell('A1').value
-            old_data['war_history'] = json.loads(val) if val else {}
-        except:
-            pass
-
-        try:
-            ws_app = sh.worksheet("AppData")
-        except:
-            ws_app = sh.add_worksheet("AppData", rows="2", cols="1")
-        ws_app.update('A1', [[json.dumps(old_data)]])
-    except Exception as e:
-        st.warning(f"Migration error: {e}")
-
 def refresh_app_data():
-    migrate_old_data_to_appdata()
     sh = get_spreadsheet()
     if sh is None:
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
-    try:
+
+    # تابع کمکی برای خواندن یک برگه در صورت وجود
+    def read_sheet(name):
         try:
-            ws = sh.worksheet("AppData")
+            ws = sh.worksheet(name)
+            # خواندن تمام سلول‌های ستون اول به صورت یک JSON بزرگ
+            all_rows = ws.col_values(1)
+            if all_rows:
+                return json.loads(all_rows[0]) if all_rows[0] else {}
         except:
-            ws = sh.add_worksheet("AppData", rows="2", cols="1")
-            empty_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
-            ws.update('A1', [[json.dumps(empty_data)]])
-            return empty_data
-        val = ws.acell('A1').value
-        if val:
-            return json.loads(val)
-        else:
-            empty_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
-            ws.update('A1', [[json.dumps(empty_data)]])
-            return empty_data
-    except Exception as e:
-        st.error(f"Error reading AppData: {e}")
-        return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+            pass
+        return {}
+
+    data = {}
+    try:
+        data['clan_tags'] = [t.strip() for t in sh.worksheet("ClanTags").col_values(1) if t.strip()]
+    except:
+        try:
+            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+        except:
+            pass
+        data['clan_tags'] = []
+
+    data['daily_stats'] = read_sheet("DailyStats")
+    if not data['daily_stats']:
+        try:
+            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+        except:
+            pass
+
+    data['member_snaps'] = read_sheet("MemberSnapshots")
+    if not data['member_snaps']:
+        try:
+            ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
+        except:
+            pass
+
+    data['war_history'] = read_sheet("WarHistory")
+    if not data['war_history']:
+        try:
+            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+        except:
+            pass
+
+    return data
 
 def save_app_data(data):
+    sh = get_spreadsheet()
+    if sh is None: return
+
+    # ذخیره تگ‌ها در برگهٔ ClanTags
     try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try:
-            ws = sh.worksheet("AppData")
-        except:
-            ws = sh.add_worksheet("AppData", rows="2", cols="1")
-        ws.update('A1', [[json.dumps(data)]])
-        st.session_state.app_data = data
-        st.session_state.last_sheets_refresh = time.time()
-    except Exception as e:
-        st.error(f"Error saving AppData: {e}")
+        ws = sh.worksheet("ClanTags")
+    except:
+        ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+    ws.clear()
+    if data.get('clan_tags'):
+        ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']])
+
+    # ذخیره daily_stats در یک سل (هنوز از ۵۰ هزار کاراکتر بیشتر نشده، ولی اگر بشه، به ردیفی تغییر می‌دیم)
+    try:
+        ws = sh.worksheet("DailyStats")
+    except:
+        ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+    ws.update('A1', [[json.dumps(data.get('daily_stats', {}))]])
+
+    try:
+        ws = sh.worksheet("MemberSnapshots")
+    except:
+        ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
+    ws.update('A1', [[json.dumps(data.get('member_snaps', {}))]])
+
+    try:
+        ws = sh.worksheet("WarHistory")
+    except:
+        ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+    ws.update('A1', [[json.dumps(data.get('war_history', {}))]])
+
+    st.session_state.app_data = data
+    st.session_state.last_sheets_refresh = time.time()
 
 def get_app_data():
     now = time.time()
@@ -538,7 +548,7 @@ seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
 # ------------------------------
-# Dynamic CSS based on theme (unchanged)
+# Dynamic CSS based on theme
 # ------------------------------
 def get_theme_css():
     if st.session_state.theme == "light":
@@ -784,11 +794,39 @@ def add_war_to_history_sheets(clan_tag, war_data):
         history[clan_tag].append(war_data)
     save_war_history_sheets(history)
 
+def paginate(items, page_key):
+    page = st.session_state.get(page_key, 1)
+    total = len(items)
+    total_pages = max(1, -(-total // ITEMS_PER_PAGE))  # ceil division
+    if page < 1:
+        st.session_state[page_key] = 1
+        page = 1
+    elif page > total_pages:
+        st.session_state[page_key] = total_pages
+        page = total_pages
+    start = (page - 1) * ITEMS_PER_PAGE
+    end = start + ITEMS_PER_PAGE
+    return items[start:end], page, total_pages, total
+
+def show_pagination(total_pages, page, total, page_key):
+    if total_pages > 1:
+        col1, col2, col3, col4, col5 = st.columns([1, 1, 2, 1, 1])
+        with col1:
+            if st.button(t("prev_page"), key=f"prev_{page_key}"):
+                st.session_state[page_key] = max(1, page - 1)
+                st.rerun()
+        with col3:
+            st.write(f"{t('page')} {page} / {total_pages} ({total} {t('name') if 'clan' in page_key else t('name')})")
+        with col5:
+            if st.button(t("next_page"), key=f"next_{page_key}"):
+                st.session_state[page_key] = min(total_pages, page + 1)
+                st.rerun()
+
 # ------------------------------
 # Sidebar
 # ------------------------------
 with st.sidebar:
-    # About section (همانند قبل)
+    # About section (hidden by default)
     if st.button(t("about_btn"), use_container_width=True):
         # شمارنده کلیک مخفی برای باز کردن فرم ادمین
         now = time.time()
@@ -845,7 +883,6 @@ with st.sidebar:
     # بخش مدیریت مخفی
     # -----------------------------------------------------------------
     if st.session_state.admin_authenticated:
-        # پنل کامل
         st.markdown("---")
         st.header(t("admin_panel"))
         st.success(t("logged_in"))
@@ -973,7 +1010,7 @@ with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
 
 # ------------------------------
-# Routing (unchanged)
+# Routing
 # ------------------------------
 if st.session_state.selected_clan_tag:
     selected_clan = next((c for c in all_clans_list if c['tag'] == st.session_state.selected_clan_tag), None)
@@ -1210,7 +1247,8 @@ else:
             csv_download_button(filtered_clans, "clans.csv",
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","lost"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("lost")])
-            for rank, clan in enumerate(filtered_clans, 1):
+            page_items, page, total_pages, total = paginate(filtered_clans, "clan_page")
+            for rank, clan in enumerate(page_items, (page - 1) * ITEMS_PER_PAGE + 1):
                 with st.container():
                     st.markdown('<div class="clan-card">', unsafe_allow_html=True)
                     col_rank, col_badge, col_info, col_stats, col_btn = st.columns([0.5, 1, 3, 5, 1.5])
@@ -1240,22 +1278,24 @@ else:
                             st.session_state.selected_clan_tag = clan['tag']
                             st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
+            show_pagination(total_pages, page, total, "clan_page")
         else:
             st.info(t("no_clan_found"))
 
     with tab2:
         all_players = sorted(all_players_list, key=lambda x: x['donations'], reverse=True)
-        filtered_players = filter_players(all_players, search_query)[:100]
-        st.subheader(t("player_count", count=len(filtered_players)))
+        filtered_players = filter_players(all_players, search_query)
         if filtered_players:
             csv_download_button(filtered_players, "players.csv",
                                 columns=["rank","name","clan_name","level","donations","received"],
                                 headers=[t("rank"), t("player_name_column"), t("clan_name_column"), t("level"), t("donated"), t("received")])
+            page_items, page, total_pages, total = paginate(filtered_players, "player_page")
             p_table = f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('name')}</th><th>{t('clan')}</th><th>{t('level')}</th><th>🔥 {t('donated')}</th><th>📥 {t('received_col')}</th></tr></thead><tbody>"
-            for idx, p in enumerate(filtered_players, 1):
+            for idx, p in enumerate(page_items, (page - 1) * ITEMS_PER_PAGE + 1):
                 p_table += f"<tr><td>{idx}</td><td><a href='?player={p['tag']}' style='color:white; font-weight:bold;'>{p['name']}</a></td><td><img src='{p['clan_badge']}' width='20'> {p['clan_name']}</td><td><span class='lvl-badge'>⭐ {p['level']}</span></td><td style='color:#00ffcc'>{p['donations']:,}</td><td>{p['received']:,}</td></tr>"
             p_table += "</tbody></table></div>"
             st.markdown(p_table, unsafe_allow_html=True)
+            show_pagination(total_pages, page, total, "player_page")
             if 'player' in st.query_params:
                 player_tag = st.query_params['player']
                 st.session_state.selected_player_tag = player_tag
@@ -1276,13 +1316,14 @@ else:
         high_lvl = [p for p in all_players_list if p['level'] >= 300]
         high_lvl = sorted(high_lvl, key=lambda x: x['level'], reverse=True)
         filtered_high = filter_players(high_lvl, search_query)
-        st.subheader(t("legend_count", count=len(filtered_high)))
         if filtered_high:
+            page_items, page, total_pages, total = paginate(filtered_high, "legend_page")
             h_table = f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('name')}</th><th>{t('clan')}</th><th>{t('level')}</th><th>🔥 {t('donated')}</th></tr></thead><tbody>"
-            for idx, p in enumerate(filtered_high, 1):
+            for idx, p in enumerate(page_items, (page - 1) * ITEMS_PER_PAGE + 1):
                 h_table += f"<tr><td>{idx}</td><td><a href='?player={p['tag']}' style='color:gold; font-weight:bold;'>🏆 {p['name']}</a></td><td><img src='{p['clan_badge']}' width='20'> {p['clan_name']}</td><td><span class='th-badge'>💎 {p['level']}</span></td><td style='color:#00ffcc'>{p['donations']:,}</td></tr>"
             h_table += "</tbody></table></div>"
             st.markdown(h_table, unsafe_allow_html=True)
+            show_pagination(total_pages, page, total, "legend_page")
             if 'player' in st.query_params:
                 player_tag = st.query_params['player']
                 st.session_state.selected_player_tag = player_tag
