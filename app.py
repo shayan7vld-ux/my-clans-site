@@ -336,7 +336,7 @@ if 'legend_page' not in st.session_state:
 ITEMS_PER_PAGE = 50
 
 # ------------------------------
-# Google Sheets helpers (Row-based storage - NO MORE SIZE LIMITS)
+# Google Sheets helpers (FULLY ROBUST VERSION)
 # ------------------------------
 SHEETS_REFRESH_INTERVAL = 300
 
@@ -365,32 +365,47 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
-def get_or_create_worksheet(sh, name, rows=100, cols=1):
+def get_or_create_worksheet(sh, name, rows=500, cols=1):
     try:
         return sh.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         try:
             return sh.add_worksheet(title=name, rows=str(rows), cols=str(cols))
-        except gspread.exceptions.APIError:
-            return sh.worksheet(name)
+        except gspread.exceptions.APIError as e:
+            if "already exists" in str(e).lower():
+                return sh.worksheet(name)
+            raise e
 
-def save_json_in_rows(ws, data, max_chars_per_cell=45000):
-    """ذخیرهٔ JSON بزرگ در چند ردیف برای جلوگیری از خطای حجم."""
-    json_str = json.dumps(data)
-    chunks = [json_str[i:i+max_chars_per_cell] for i in range(0, len(json_str), max_chars_per_cell)]
+def save_json_in_rows(ws, data):
+    try:
+        json_str = json.dumps(data, ensure_ascii=False)
+    except:
+        json_str = "{}"
+    chunks = [json_str[i:i+45000] for i in range(0, len(json_str), 45000)]
     ws.clear()
     if chunks:
-        ws.update('A1:A'+str(len(chunks)), [[chunk] for chunk in chunks])
+        try:
+            ws.update('A1:A'+str(len(chunks)), [[chunk] for chunk in chunks], value_input_option='RAW')
+        except gspread.exceptions.APIError as e:
+            if len(chunks) > 1:
+                ws.update('A1:A1', [[""]] * len(chunks))
+                for idx, chunk in enumerate(chunks, 1):
+                    ws.update(f'A{idx}', [[chunk]], value_input_option='RAW')
+            else:
+                raise e
 
 def load_json_from_rows(ws):
-    """خواندن JSON بزرگ از چند ردیف."""
     try:
         values = ws.col_values(1)
-        if values:
+        if values and values[0]:
             combined = ''.join(values)
-            return json.loads(combined) if combined else {}
+            return json.loads(combined)
         return {}
     except:
+        try:
+            ws.update('A1', [["{}"]], value_input_option='RAW')
+        except:
+            pass
         return {}
 
 def refresh_app_data():
@@ -400,26 +415,26 @@ def refresh_app_data():
 
     data = {}
     try:
-        ws = get_or_create_worksheet(sh, "ClanTags")
+        ws = get_or_create_worksheet(sh, "ClanTags", rows=1000)
         tags = ws.col_values(1)
         data['clan_tags'] = [t.strip() for t in tags if t.strip()]
     except:
         data['clan_tags'] = []
 
     try:
-        ws = get_or_create_worksheet(sh, "DailyStats")
+        ws = get_or_create_worksheet(sh, "DailyStats", rows=2000)
         data['daily_stats'] = load_json_from_rows(ws)
     except:
         data['daily_stats'] = {}
 
     try:
-        ws = get_or_create_worksheet(sh, "MemberSnapshots")
+        ws = get_or_create_worksheet(sh, "MemberSnapshots", rows=2000)
         data['member_snaps'] = load_json_from_rows(ws)
     except:
         data['member_snaps'] = {}
 
     try:
-        ws = get_or_create_worksheet(sh, "WarHistory")
+        ws = get_or_create_worksheet(sh, "WarHistory", rows=500)
         data['war_history'] = load_json_from_rows(ws)
     except:
         data['war_history'] = {}
@@ -430,19 +445,31 @@ def save_app_data(data):
     sh = get_spreadsheet()
     if sh is None: return
 
-    ws = get_or_create_worksheet(sh, "ClanTags")
-    ws.clear()
-    if data.get('clan_tags'):
-        ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']])
+    try:
+        ws = get_or_create_worksheet(sh, "ClanTags", rows=1000)
+        ws.clear()
+        if data.get('clan_tags'):
+            ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']], value_input_option='RAW')
+    except Exception as e:
+        st.error(f"Error saving ClanTags: {e}")
 
-    ws = get_or_create_worksheet(sh, "DailyStats")
-    save_json_in_rows(ws, data.get('daily_stats', {}))
+    try:
+        ws = get_or_create_worksheet(sh, "DailyStats", rows=2000)
+        save_json_in_rows(ws, data.get('daily_stats', {}))
+    except Exception as e:
+        st.error(f"Error saving DailyStats: {e}")
 
-    ws = get_or_create_worksheet(sh, "MemberSnapshots")
-    save_json_in_rows(ws, data.get('member_snaps', {}))
+    try:
+        ws = get_or_create_worksheet(sh, "MemberSnapshots", rows=2000)
+        save_json_in_rows(ws, data.get('member_snaps', {}))
+    except Exception as e:
+        st.error(f"Error saving MemberSnapshots: {e}")
 
-    ws = get_or_create_worksheet(sh, "WarHistory")
-    save_json_in_rows(ws, data.get('war_history', {}))
+    try:
+        ws = get_or_create_worksheet(sh, "WarHistory", rows=500)
+        save_json_in_rows(ws, data.get('war_history', {}))
+    except Exception as e:
+        st.error(f"Error saving WarHistory: {e}")
 
     st.session_state.app_data = data
     st.session_state.last_sheets_refresh = time.time()
@@ -451,7 +478,11 @@ def get_app_data():
     now = time.time()
     if (st.session_state.app_data is None or 
         (now - st.session_state.last_sheets_refresh) > SHEETS_REFRESH_INTERVAL):
-        st.session_state.app_data = refresh_app_data()
+        try:
+            st.session_state.app_data = refresh_app_data()
+        except:
+            if st.session_state.app_data is None:
+                st.session_state.app_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
         st.session_state.last_sheets_refresh = now
     return st.session_state.app_data
 
