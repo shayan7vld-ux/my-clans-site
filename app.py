@@ -65,6 +65,7 @@ TRANSLATIONS = {
         "username": "Username",
         "password": "Password",
         "login": "Login",
+        "logout": "Logout",
         "logged_in": "You are logged in as admin.",
         "last_visit_btn": "📂 Last Visit",
         "last_visit_info": "Last visit: {time}",
@@ -161,6 +162,7 @@ TRANSLATIONS = {
         "username": "نام کاربری",
         "password": "رمز عبور",
         "login": "ورود",
+        "logout": "خروج",
         "logged_in": "شما به‌عنوان مدیر وارد شده‌اید.",
         "last_visit_btn": "📂 آخرین بازدید",
         "last_visit_info": "آخرین بازدید: {time}",
@@ -314,6 +316,12 @@ if 'last_visit' not in st.session_state:
     st.session_state.last_visit = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
+if 'show_admin_login' not in st.session_state:
+    st.session_state.show_admin_login = False
+if 'about_click_count' not in st.session_state:
+    st.session_state.about_click_count = 0
+if 'last_about_click' not in st.session_state:
+    st.session_state.last_about_click = 0
 if 'theme' not in st.session_state:
     st.session_state.theme = "dark"
 if 'max_donations_seen' not in st.session_state:
@@ -328,9 +336,9 @@ if 'last_sheets_refresh' not in st.session_state:
     st.session_state.last_sheets_refresh = 0
 
 # ------------------------------
-# Google Sheets helpers (with migration)
+# Google Sheets helpers (unchanged)
 # ------------------------------
-SHEETS_REFRESH_INTERVAL = 300  # seconds
+SHEETS_REFRESH_INTERVAL = 300
 
 @st.cache_resource
 def get_gsheet_client():
@@ -530,7 +538,7 @@ seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
 # ------------------------------
-# Dynamic CSS based on theme
+# Dynamic CSS based on theme (unchanged)
 # ------------------------------
 def get_theme_css():
     if st.session_state.theme == "light":
@@ -780,8 +788,24 @@ def add_war_to_history_sheets(clan_tag, war_data):
 # Sidebar
 # ------------------------------
 with st.sidebar:
+    # About section (همانند قبل)
     if st.button(t("about_btn"), use_container_width=True):
+        # شمارنده کلیک مخفی برای باز کردن فرم ادمین
+        now = time.time()
+        if now - st.session_state.last_about_click < 5:
+            st.session_state.about_click_count += 1
+        else:
+            st.session_state.about_click_count = 1
+        st.session_state.last_about_click = now
+
+        if st.session_state.about_click_count >= 3:
+            st.session_state.show_admin_login = True
+            st.session_state.about_click_count = 0
+
+        # همچنین پنل درباره را باز/بسته کند
         st.session_state.show_about = not st.session_state.show_about
+        st.rerun()
+
     if st.session_state.show_about:
         with st.container():
             st.subheader(t("about_title"))
@@ -817,20 +841,19 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
-    st.markdown("---")
-    st.header(t("admin_panel"))
-    username = st.text_input(t("username"))
-    password = st.text_input(t("password"), type="password")
-    if st.button(t("login")):
-        if username == "amirdelavari" and password == "Amirgameover1382":
-            st.session_state.admin_authenticated = True
-            st.success(t("logged_in"))
-        else:
-            st.error("Invalid username or password")
-            st.session_state.admin_authenticated = False
-
+    # -----------------------------------------------------------------
+    # بخش مدیریت مخفی
+    # -----------------------------------------------------------------
     if st.session_state.admin_authenticated:
+        # پنل کامل
+        st.markdown("---")
+        st.header(t("admin_panel"))
         st.success(t("logged_in"))
+        if st.button(t("logout")):
+            st.session_state.admin_authenticated = False
+            st.session_state.show_admin_login = False
+            st.rerun()
+
         if st.button(t("last_visit_btn")):
             st.info(t("last_visit_info", time=st.session_state.last_visit))
         st.caption(t("auto_refresh_caption"))
@@ -881,7 +904,7 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
-        # ---- Full App Backup ----
+        # Full App Backup
         st.subheader(t("full_backup_title"))
         if st.button(t("download_full_backup")):
             full_data = get_app_data()
@@ -911,6 +934,26 @@ with st.sidebar:
             except:
                 st.error("Invalid daily stats file.")
 
+    elif st.session_state.show_admin_login:
+        st.markdown("---")
+        st.header(t("admin_panel"))
+        username = st.text_input(t("username"))
+        password = st.text_input(t("password"), type="password")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(t("login")):
+                if username == "amirdelavari" and password == "Amirgameover1382":
+                    st.session_state.admin_authenticated = True
+                    st.session_state.show_admin_login = False
+                    st.success(t("logged_in"))
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
+        with col2:
+            if st.button("Cancel"):
+                st.session_state.show_admin_login = False
+                st.rerun()
+
 # ------------------------------
 # Force Refresh Button
 # ------------------------------
@@ -930,7 +973,7 @@ with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
 
 # ------------------------------
-# Routing
+# Routing (unchanged)
 # ------------------------------
 if st.session_state.selected_clan_tag:
     selected_clan = next((c for c in all_clans_list if c['tag'] == st.session_state.selected_clan_tag), None)
