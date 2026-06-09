@@ -314,7 +314,7 @@ if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
 # ------------------------------
-# Google Sheets helpers
+# Google Sheets helpers (با کش برای جلوگیری از خطای quota)
 # ------------------------------
 @st.cache_resource
 def get_gsheet_client():
@@ -329,6 +329,7 @@ def get_gsheet_client():
         st.error(f"Google Sheets connection error: {e}")
         return None
 
+@st.cache_resource
 def get_spreadsheet():
     client = get_gsheet_client()
     if client is None:
@@ -340,6 +341,7 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
+@st.cache_data(ttl=120)
 def load_clan_tags_sheets():
     try:
         sh = get_spreadsheet()
@@ -362,7 +364,10 @@ def save_clan_tags_sheets(tags):
         if tags:
             ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
     except: pass
+    # پاک کردن کش بعد از ذخیره
+    load_clan_tags_sheets.clear()
 
+@st.cache_data(ttl=120)
 def load_daily_stats_sheets():
     try:
         sh = get_spreadsheet()
@@ -381,7 +386,9 @@ def save_daily_stats_sheets(stats):
         except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
         ws.update('A1', [[json.dumps(stats)]])
     except: pass
+    load_daily_stats_sheets.clear()
 
+@st.cache_data(ttl=120)
 def load_member_snapshot_sheets():
     try:
         sh = get_spreadsheet()
@@ -400,7 +407,9 @@ def save_member_snapshot_sheets(snaps):
         except: ws = sh.add_worksheet("MemberSnapshots", rows="2", cols="1")
         ws.update('A1', [[json.dumps(snaps)]])
     except: pass
+    load_member_snapshot_sheets.clear()
 
+@st.cache_data(ttl=120)
 def load_war_history_sheets():
     try:
         sh = get_spreadsheet()
@@ -419,6 +428,7 @@ def save_war_history_sheets(history):
         except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
         ws.update('A1', [[json.dumps(history)]])
     except: pass
+    load_war_history_sheets.clear()
 
 # ------------------------------
 # Clan Tags from Google Sheets
@@ -499,7 +509,6 @@ def get_theme_css():
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            position: relative;
         }
         .clan-card:hover {
             transform: scale(1.02);
@@ -510,19 +519,6 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; }
         .stat-label { font-size: 10px; color: #6c757d; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
-        .card-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-        }
-        .card-overlay button {
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-        }
         </style>
         """
     else:
@@ -558,7 +554,6 @@ def get_theme_css():
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            position: relative;
         }
         .clan-card:hover {
             transform: scale(1.02);
@@ -569,19 +564,6 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
         .stat-label { font-size: 10px; color: #8b949e; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
-        .card-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 2;
-        }
-        .card-overlay button {
-            width: 100%;
-            height: 100%;
-            opacity: 0;
-        }
         </style>
         """
 
@@ -608,7 +590,6 @@ st.markdown("""
     .custom-table th, .custom-table td { font-size: 12px; padding: 8px 4px; }
     .glass-metric h2 { font-size: 20px; }
     .clan-card { flex-wrap: wrap; }
-    .clan-card .stats-row { margin-top: 10px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -739,10 +720,6 @@ def add_war_to_history_sheets(clan_tag, war_data):
     if not any(w.get("warTag") == war_tag for w in history[clan_tag]):
         history[clan_tag].append(war_data)
     save_war_history_sheets(history)
-
-def go_to_clan(tag):
-    st.session_state.selected_clan_tag = tag
-    st.rerun()
 
 # ------------------------------
 # Sidebar
@@ -1120,44 +1097,39 @@ else:
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","lost"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("lost")])
             for rank, clan in enumerate(filtered_clans, 1):
-                card_html = f"""
-                <div class="clan-card">
-                    <div style="font-size: 18px; font-weight: bold; margin-right: 15px; min-width: 30px;">{rank}</div>
-                    <img src="{clan['badge']}" width="45" style="margin-right: 15px;">
-                    <div style="flex-grow: 1; margin-right: 20px;">
-                        <div style="font-size: 18px; font-weight: bold;">{clan['name']}</div>
-                        <div style="font-size: 12px; opacity: 0.7;">{clan['tag']} • 👑 {clan['leader']}</div>
-                        <div style="font-size: 12px; opacity: 0.7;">👥 {clan['members']}/50</div>
-                    </div>
-                    <div class="stats-row" style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
-                        <div style="text-align: center;">
-                            <span class="stat-label">{t("donated")}</span>
-                            <span class="stat-value" style="color: #00ffcc;">{clan['donations']:,}</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <span class="stat-label">{t("donated_today")}</span>
-                            <span class="stat-value" style="color: #ffaa45;">{clan.get('donations_today', 0):,}</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <span class="stat-label">{t("received")}</span>
-                            <span class="stat-value" style="color: #ff6b6b;">{clan['received']:,}</span>
-                        </div>
-                        <div style="text-align: center;">
-                            <span class="stat-label">{t("lost")}</span>
-                            <span class="stat-value" style="color: #ff4444;">{clan.get('lost_season', 0):,}</span>
-                        </div>
-                    </div>
-                </div>
-                """
-                st.markdown(card_html, unsafe_allow_html=True)
-                # دکمهٔ شفاف روی کارت
                 with st.container():
-                    st.markdown('<div class="card-overlay">', unsafe_allow_html=True)
-                    st.button(" ", key=f"clan_btn_{clan['tag']}", on_click=go_to_clan, args=(clan['tag'],))
+                    st.markdown('<div class="clan-card">', unsafe_allow_html=True)
+                    col_rank, col_badge, col_info, col_stats, col_btn = st.columns([0.5, 1, 3, 5, 1.5])
+                    with col_rank:
+                        st.markdown(f"**{rank}**")
+                    with col_badge:
+                        st.image(clan['badge'], width=45)
+                    with col_info:
+                        st.markdown(f"<div style='font-size:18px; font-weight:bold;'>{clan['name']}</div>", unsafe_allow_html=True)
+                        st.caption(f"{clan['tag']} • 👑 {clan['leader']} • 👥 {clan['members']}/50")
+                    with col_stats:
+                        s_cols = st.columns(4)
+                        with s_cols[0]:
+                            st.markdown(f"<span class='stat-label'>{t('donated')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span class='stat-value' style='color:#00ffcc;'>{clan['donations']:,}</span>", unsafe_allow_html=True)
+                        with s_cols[1]:
+                            st.markdown(f"<span class='stat-label'>{t('donated_today')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span class='stat-value' style='color:#ffaa45;'>{clan.get('donations_today', 0):,}</span>", unsafe_allow_html=True)
+                        with s_cols[2]:
+                            st.markdown(f"<span class='stat-label'>{t('received')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span class='stat-value' style='color:#ff6b6b;'>{clan['received']:,}</span>", unsafe_allow_html=True)
+                        with s_cols[3]:
+                            st.markdown(f"<span class='stat-label'>{t('lost')}</span>", unsafe_allow_html=True)
+                            st.markdown(f"<span class='stat-value' style='color:#ff4444;'>{clan.get('lost_season', 0):,}</span>", unsafe_allow_html=True)
+                    with col_btn:
+                        if st.button("🛡️ Open", key=f"clan_btn_{clan['tag']}"):
+                            st.session_state.selected_clan_tag = clan['tag']
+                            st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info(t("no_clan_found"))
 
+    # (بقیه تب‌ها بدون تغییر)
     with tab2:
         all_players = sorted(all_players_list, key=lambda x: x['donations'], reverse=True)
         filtered_players = filter_players(all_players, search_query)[:100]
