@@ -30,7 +30,7 @@ except KeyError:
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
 # ------------------------------
-# Language System (unchanged)
+# Language System
 # ------------------------------
 LANGUAGES = {
     "en": "🇺🇸 English", "fa": "🇮🇷 فارسی", "es": "🇪🇸 Español", "fr": "🇫🇷 Français",
@@ -336,7 +336,7 @@ if 'legend_page' not in st.session_state:
 ITEMS_PER_PAGE = 50
 
 # ------------------------------
-# Google Sheets helpers (robust - no more worksheet creation errors)
+# Google Sheets helpers (Row-based storage - NO MORE SIZE LIMITS)
 # ------------------------------
 SHEETS_REFRESH_INTERVAL = 300
 
@@ -366,15 +366,32 @@ def get_spreadsheet():
         return None
 
 def get_or_create_worksheet(sh, name, rows=100, cols=1):
-    """برگه را برمی‌گرداند؛ اگر وجود نداشت، ایجاد می‌کند."""
     try:
         return sh.worksheet(name)
     except gspread.exceptions.WorksheetNotFound:
         try:
             return sh.add_worksheet(title=name, rows=str(rows), cols=str(cols))
         except gspread.exceptions.APIError:
-            # ممکن است هم‌زمان ساخته شده باشد
             return sh.worksheet(name)
+
+def save_json_in_rows(ws, data, max_chars_per_cell=45000):
+    """ذخیرهٔ JSON بزرگ در چند ردیف برای جلوگیری از خطای حجم."""
+    json_str = json.dumps(data)
+    chunks = [json_str[i:i+max_chars_per_cell] for i in range(0, len(json_str), max_chars_per_cell)]
+    ws.clear()
+    if chunks:
+        ws.update('A1:A'+str(len(chunks)), [[chunk] for chunk in chunks])
+
+def load_json_from_rows(ws):
+    """خواندن JSON بزرگ از چند ردیف."""
+    try:
+        values = ws.col_values(1)
+        if values:
+            combined = ''.join(values)
+            return json.loads(combined) if combined else {}
+        return {}
+    except:
+        return {}
 
 def refresh_app_data():
     sh = get_spreadsheet()
@@ -382,7 +399,6 @@ def refresh_app_data():
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
 
     data = {}
-    # ClanTags
     try:
         ws = get_or_create_worksheet(sh, "ClanTags")
         tags = ws.col_values(1)
@@ -390,27 +406,21 @@ def refresh_app_data():
     except:
         data['clan_tags'] = []
 
-    # DailyStats
     try:
         ws = get_or_create_worksheet(sh, "DailyStats")
-        val = ws.acell('A1').value
-        data['daily_stats'] = json.loads(val) if val else {}
+        data['daily_stats'] = load_json_from_rows(ws)
     except:
         data['daily_stats'] = {}
 
-    # MemberSnapshots
     try:
         ws = get_or_create_worksheet(sh, "MemberSnapshots")
-        val = ws.acell('A1').value
-        data['member_snaps'] = json.loads(val) if val else {}
+        data['member_snaps'] = load_json_from_rows(ws)
     except:
         data['member_snaps'] = {}
 
-    # WarHistory
     try:
         ws = get_or_create_worksheet(sh, "WarHistory")
-        val = ws.acell('A1').value
-        data['war_history'] = json.loads(val) if val else {}
+        data['war_history'] = load_json_from_rows(ws)
     except:
         data['war_history'] = {}
 
@@ -420,23 +430,19 @@ def save_app_data(data):
     sh = get_spreadsheet()
     if sh is None: return
 
-    # ClanTags
     ws = get_or_create_worksheet(sh, "ClanTags")
     ws.clear()
     if data.get('clan_tags'):
         ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']])
 
-    # DailyStats
     ws = get_or_create_worksheet(sh, "DailyStats")
-    ws.update('A1', [[json.dumps(data.get('daily_stats', {}))]])
+    save_json_in_rows(ws, data.get('daily_stats', {}))
 
-    # MemberSnapshots
     ws = get_or_create_worksheet(sh, "MemberSnapshots")
-    ws.update('A1', [[json.dumps(data.get('member_snaps', {}))]])
+    save_json_in_rows(ws, data.get('member_snaps', {}))
 
-    # WarHistory
     ws = get_or_create_worksheet(sh, "WarHistory")
-    ws.update('A1', [[json.dumps(data.get('war_history', {}))]])
+    save_json_in_rows(ws, data.get('war_history', {}))
 
     st.session_state.app_data = data
     st.session_state.last_sheets_refresh = time.time()
@@ -525,7 +531,7 @@ seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
 # ------------------------------
-# Dynamic CSS based on theme (unchanged)
+# Dynamic CSS based on theme
 # ------------------------------
 def get_theme_css():
     if st.session_state.theme == "light":
