@@ -496,10 +496,21 @@ def get_theme_css():
             padding: 15px;
             margin-bottom: 12px;
             backdrop-filter: blur(20px);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: #1c1e21;
+        }
+        .clan-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
         }
         .war-card h4 { margin-top: 0; }
         .war-clan-name { font-weight: bold; }
         .war-stats { display: flex; justify-content: space-between; }
+        .stat-label { font-size: 10px; color: #6c757d; display: block; }
+        .stat-value { font-size: 16px; font-weight: bold; }
         </style>
         """
     else:
@@ -532,10 +543,21 @@ def get_theme_css():
             padding: 15px;
             margin-bottom: 12px;
             backdrop-filter: blur(20px);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            color: #c9d1d9;
+        }
+        .clan-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         .war-card h4 { color: #ffaa45; margin-top: 0; }
         .war-clan-name { font-weight: bold; color: #f0f6fc; }
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
+        .stat-label { font-size: 10px; color: #8b949e; display: block; }
+        .stat-value { font-size: 16px; font-weight: bold; }
         </style>
         """
 
@@ -561,6 +583,8 @@ st.markdown("""
     .dancer { font-size: 32px; }
     .custom-table th, .custom-table td { font-size: 12px; padding: 8px 4px; }
     .glass-metric h2 { font-size: 20px; }
+    .clan-card { flex-wrap: wrap; }
+    .clan-card .stats-row { margin-top: 10px; }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -1068,33 +1092,41 @@ else:
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","lost"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("lost")])
             for rank, clan in enumerate(filtered_clans, 1):
-                with st.container():
-                    st.markdown(f'<div class="clan-card">', unsafe_allow_html=True)
-                    col_r, col_badge, col_info, col_stats = st.columns([0.5, 1, 4, 5])
-                    with col_r:
-                        st.markdown(f"**{rank}**")
-                    with col_badge:
-                        st.image(clan['badge'], width=45)
-                    with col_info:
-                        if st.button(f"🛡️ {clan['name']}", key=f"clan_btn_{clan['tag']}", use_container_width=True):
-                            st.session_state.selected_clan_tag = clan['tag']
-                            st.rerun()
-                        st.caption(f"{clan['tag']} • 👑 {clan['leader']} • 👥 {clan['members']}/50")
-                    with col_stats:
-                        # نوار افقی آمارها
-                        stats_cols = st.columns(4)
-                        with stats_cols[0]:
-                            st.markdown(f"<span style='color:#00ffcc; font-weight:bold;'>{clan['donations']:,} 🔥</span>", unsafe_allow_html=True)
-                        with stats_cols[1]:
-                            st.markdown(f"<span style='color:#ffaa45;'>{clan.get('donations_today', 0):,} 📅</span>", unsafe_allow_html=True)
-                        with stats_cols[2]:
-                            st.markdown(f"<span style='color:#ff6b6b;'>{clan['received']:,} 📥</span>", unsafe_allow_html=True)
-                        with stats_cols[3]:
-                            st.markdown(f"<span style='color:#ff4444;'>{clan.get('lost_season', 0):,} 📉</span>", unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
+                # کارت کامل با لینک
+                card_html = f"""
+                <a href="?clan={clan['tag']}" class="clan-card">
+                    <div style="font-size: 18px; font-weight: bold; margin-right: 15px; min-width: 30px;">{rank}</div>
+                    <img src="{clan['badge']}" width="45" style="margin-right: 15px;">
+                    <div style="flex-grow: 1; margin-right: 20px;">
+                        <div style="font-size: 18px; font-weight: bold;">{clan['name']}</div>
+                        <div style="font-size: 12px; opacity: 0.7;">{clan['tag']} • 👑 {clan['leader']}</div>
+                        <div style="font-size: 12px; opacity: 0.7;">👥 {clan['members']}/50</div>
+                    </div>
+                    <div class="stats-row" style="display: flex; align-items: center; gap: 15px; white-space: nowrap;">
+                        <div style="text-align: center;">
+                            <span class="stat-label">{t("donated")}</span>
+                            <span class="stat-value" style="color: #00ffcc;">{clan['donations']:,}</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <span class="stat-label">{t("donated_today")}</span>
+                            <span class="stat-value" style="color: #ffaa45;">{clan.get('donations_today', 0):,}</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <span class="stat-label">{t("received")}</span>
+                            <span class="stat-value" style="color: #ff6b6b;">{clan['received']:,}</span>
+                        </div>
+                        <div style="text-align: center;">
+                            <span class="stat-label">{t("lost")}</span>
+                            <span class="stat-value" style="color: #ff4444;">{clan.get('lost_season', 0):,}</span>
+                        </div>
+                    </div>
+                </a>
+                """
+                st.markdown(card_html, unsafe_allow_html=True)
         else:
             st.info(t("no_clan_found"))
 
+    # (بقیه تب‌ها بدون تغییر)
     with tab2:
         all_players = sorted(all_players_list, key=lambda x: x['donations'], reverse=True)
         filtered_players = filter_players(all_players, search_query)[:100]
