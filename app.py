@@ -316,12 +316,13 @@ if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
 # ------------------------------
-# Google Sheets helpers
+# Google Sheets helpers (FIXED)
 # ------------------------------
 @st.cache_resource
 def get_gsheet_client():
     try:
-        creds_dict = json.loads(st.secrets["gcp_service_account"])
+        # مستقیماً دیکشنری را از secrets بگیر (بدون json.loads)
+        creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(
             creds_dict,
             ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -922,7 +923,7 @@ if st.session_state.selected_clan_tag:
             history = load_war_history_sheets()
             clan_wars = history.get(selected_clan['tag'], [])
             if clan_wars:
-                war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></tr></thead><tbody>"
+                war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></table></thead><tbody>"
                 for w in reversed(clan_wars[-10:]):
                     war_table += f"<tr><td>{w.get('date','?')}</td><td>{w.get('opponentName','Unknown')}</td><td>{w.get('result','?')}</td><td>⭐ {w.get('clanStars',0)}</td><td>{w.get('clanDestruction',0):.1f}%</td></tr>"
                 war_table += "</tbody></table></div>"
