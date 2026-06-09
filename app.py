@@ -499,8 +499,7 @@ def get_theme_css():
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            text-decoration: none;
-            color: #1c1e21;
+            position: relative;
         }
         .clan-card:hover {
             transform: scale(1.02);
@@ -511,6 +510,19 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; }
         .stat-label { font-size: 10px; color: #6c757d; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
+        .card-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+        .card-overlay button {
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+        }
         </style>
         """
     else:
@@ -546,8 +558,7 @@ def get_theme_css():
             transition: all 0.2s;
             display: flex;
             align-items: center;
-            text-decoration: none;
-            color: #c9d1d9;
+            position: relative;
         }
         .clan-card:hover {
             transform: scale(1.02);
@@ -558,6 +569,19 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
         .stat-label { font-size: 10px; color: #8b949e; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
+        .card-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+        }
+        .card-overlay button {
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+        }
         </style>
         """
 
@@ -715,6 +739,10 @@ def add_war_to_history_sheets(clan_tag, war_data):
     if not any(w.get("warTag") == war_tag for w in history[clan_tag]):
         history[clan_tag].append(war_data)
     save_war_history_sheets(history)
+
+def go_to_clan(tag):
+    st.session_state.selected_clan_tag = tag
+    st.rerun()
 
 # ------------------------------
 # Sidebar
@@ -1092,9 +1120,8 @@ else:
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","lost"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("lost")])
             for rank, clan in enumerate(filtered_clans, 1):
-                # کارت کامل با لینک
                 card_html = f"""
-                <a href="?clan={clan['tag']}" class="clan-card">
+                <div class="clan-card">
                     <div style="font-size: 18px; font-weight: bold; margin-right: 15px; min-width: 30px;">{rank}</div>
                     <img src="{clan['badge']}" width="45" style="margin-right: 15px;">
                     <div style="flex-grow: 1; margin-right: 20px;">
@@ -1120,13 +1147,17 @@ else:
                             <span class="stat-value" style="color: #ff4444;">{clan.get('lost_season', 0):,}</span>
                         </div>
                     </div>
-                </a>
+                </div>
                 """
                 st.markdown(card_html, unsafe_allow_html=True)
+                # دکمهٔ شفاف روی کارت
+                with st.container():
+                    st.markdown('<div class="card-overlay">', unsafe_allow_html=True)
+                    st.button(" ", key=f"clan_btn_{clan['tag']}", on_click=go_to_clan, args=(clan['tag'],))
+                    st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info(t("no_clan_found"))
 
-    # (بقیه تب‌ها بدون تغییر)
     with tab2:
         all_players = sorted(all_players_list, key=lambda x: x['donations'], reverse=True)
         filtered_players = filter_players(all_players, search_query)[:100]
