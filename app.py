@@ -145,6 +145,11 @@ TRANSLATIONS = {
         "daily_stats_backup": "🔄 Daily Stats Backup",
         "download_daily": "📥 Download Daily Stats",
         "upload_daily": "📤 Upload Daily Stats (JSON)",
+        "full_backup_title": "📦 Full App Backup",
+        "download_full_backup": "📥 Download Full Backup (JSON)",
+        "upload_full_backup": "📤 Restore Full Backup (JSON)",
+        "full_restore_success": "Full backup restored successfully!",
+        "full_restore_invalid": "Invalid backup file.",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -236,6 +241,11 @@ TRANSLATIONS = {
         "daily_stats_backup": "🔄 پشتیبان آمار روزانه",
         "download_daily": "📥 دانلود آمار روزانه",
         "upload_daily": "📤 بارگذاری آمار روزانه (JSON)",
+        "full_backup_title": "📦 پشتیبان کامل برنامه",
+        "download_full_backup": "📥 دانلود پشتیبان کامل (JSON)",
+        "upload_full_backup": "📤 بازیابی پشتیبان کامل (JSON)",
+        "full_restore_success": "پشتیبان کامل با موفقیت بازیابی شد!",
+        "full_restore_invalid": "فایل پشتیبان نامعتبر است.",
     }
 }
 
@@ -348,12 +358,10 @@ def get_spreadsheet():
         return None
 
 def migrate_old_data_to_appdata():
-    """اگر برگه‌های قدیمی وجود داشته باشند و AppData خالی باشد، داده‌ها را یکپارچه می‌کند."""
     sh = get_spreadsheet()
     if sh is None:
         return
     try:
-        # بررسی وجود AppData
         try:
             ws_app = sh.worksheet("AppData")
             val = ws_app.acell('A1').value
@@ -364,7 +372,6 @@ def migrate_old_data_to_appdata():
 
         old_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
 
-        # ClanTags
         try:
             ws = sh.worksheet("ClanTags")
             tags = ws.col_values(1)
@@ -372,7 +379,6 @@ def migrate_old_data_to_appdata():
         except:
             pass
 
-        # DailyStats
         try:
             ws = sh.worksheet("DailyStats")
             val = ws.acell('A1').value
@@ -380,7 +386,6 @@ def migrate_old_data_to_appdata():
         except:
             pass
 
-        # MemberSnapshots
         try:
             ws = sh.worksheet("MemberSnapshots")
             val = ws.acell('A1').value
@@ -388,7 +393,6 @@ def migrate_old_data_to_appdata():
         except:
             pass
 
-        # WarHistory
         try:
             ws = sh.worksheet("WarHistory")
             val = ws.acell('A1').value
@@ -396,19 +400,11 @@ def migrate_old_data_to_appdata():
         except:
             pass
 
-        # ذخیره در AppData
         try:
             ws_app = sh.worksheet("AppData")
         except:
             ws_app = sh.add_worksheet("AppData", rows="2", cols="1")
         ws_app.update('A1', [[json.dumps(old_data)]])
-
-        # حذف برگه‌های قدیمی (اختیاری)
-        # for sheet_name in ["ClanTags", "DailyStats", "MemberSnapshots", "WarHistory"]:
-        #     try:
-        #         sh.del_worksheet(sh.worksheet(sheet_name))
-        #     except:
-        #         pass
     except Exception as e:
         st.warning(f"Migration error: {e}")
 
@@ -884,6 +880,22 @@ with st.sidebar:
                     st.error(t("invalid_json"))
             except:
                 st.error(t("error_reading"))
+
+        # ---- Full App Backup ----
+        st.subheader(t("full_backup_title"))
+        if st.button(t("download_full_backup")):
+            full_data = get_app_data()
+            st.download_button("Click to download", json.dumps(full_data), "full_backup.json")
+        uploaded_full = st.file_uploader(t("upload_full_backup"), type="json", key="full_restore")
+        if uploaded_full is not None:
+            try:
+                data = json.loads(uploaded_full.getvalue().decode())
+                save_app_data(data)
+                st.session_state.clan_tags = data.get('clan_tags', [])
+                st.success(t("full_restore_success"))
+                st.rerun()
+            except:
+                st.error(t("full_restore_invalid"))
 
         st.subheader(t("daily_stats_backup"))
         if st.button(t("download_daily")):
