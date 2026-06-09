@@ -12,24 +12,27 @@ import streamlit.components.v1 as components
 from deep_translator import GoogleTranslator
 TRANSLATOR_AVAILABLE = True
 
-# ----- Google Sheets Libraries -----
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ------------------------------
-# Basic Configuration & Secrets
-# ------------------------------
 st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="expanded")
 
+# ------------- secrets -------------
 try:
     API_KEY = st.secrets["COC_API_KEY"]
+except Exception as e:
+    st.error("COC_API_KEY not found in secrets. Please add it.")
+    st.stop()
+
+try:
+    SPREADSHEET_ID = st.secrets["SPREADSHEET_ID"]
 except:
-    API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6ImFhYTJlYmQyLTYyMzktNGRhYy1hOWYwLTRhZGM5NTI3YjhhMiIsImlhdCI6MTc4MDg2MDExMCwic3ViIjoiZGV2ZWxvcGVyLzQ2NTM5OTQ5LTg3OTMtOTM4Mi00N2E4LTg4MGI3OWNjYzM5ZiIsInNjb3BlcyI6WyJjbGFzaCJdLCJsaW1pdHMiOlt7InRpZXIiOiJkZXZlbG9wZXIvc2lsdmVyIiwidHlwZSI6InRocm90dGxpbmcifSx7ImNpZHJzIjpbIjQ1Ljc5LjIxOC43OSJdLCJ0eXBlIjoiY2xpZW50In1dfQ.yprqP7Yxz6JJx3z5aJLSl-GH24fsNAtoH-aA44HkD0fnlHAxhFczAgBWnGRitcLQhsO_46ROYJZcrC1FqdRCkg"
+    st.error("SPREADSHEET_ID not found in secrets. Please add it.")
+    st.stop()
+
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
-# ------------------------------
-# Language System
-# ------------------------------
+# ------------- زبان‌ها (بدون تغییر) -------------
 LANGUAGES = {
     "en": "🇺🇸 English",
     "fa": "🇮🇷 فارسی",
@@ -291,9 +294,7 @@ def t(key, **kwargs):
         text = text.format(**kwargs)
     return text
 
-# ------------------------------
-# Session State Initialization
-# ------------------------------
+# ------------- Session State -------------
 if 'selected_clan_tag' not in st.session_state:
     st.session_state.selected_clan_tag = None
 if 'selected_player_tag' not in st.session_state:
@@ -315,9 +316,7 @@ if 'lang' not in st.session_state:
 if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
-# ------------------------------
-# Google Sheets helpers (FIXED)
-# ------------------------------
+# ------------- Google Sheets helpers (FIXED) -------------
 @st.cache_resource
 def get_gsheet_client():
     try:
@@ -337,8 +336,7 @@ def get_spreadsheet():
     if client is None:
         return None
     try:
-        sheet_id = st.secrets["SPREADSHEET_ID"]
-        return client.open_by_key(sheet_id)
+        return client.open_by_key(SPREADSHEET_ID)   # استفاده از متغیر سراسری SPREADSHEET_ID
     except Exception as e:
         st.error(f"Cannot open spreadsheet: {e}")
         return None
@@ -353,79 +351,88 @@ def load_clan_tags_sheets():
             ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
         tags = ws.col_values(1)
         return [t.strip() for t in tags if t.strip()]
-    except: return []
+    except:
+        return []
 
 def save_clan_tags_sheets(tags):
     try:
         sh = get_spreadsheet()
         if sh is None: return
-        try: ws = sh.worksheet("ClanTags")
-        except: ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+        try:
+            ws = sh.worksheet("ClanTags")
+        except:
+            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
         ws.clear()
         if tags:
             ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
-    except: pass
+    except:
+        pass
 
 def load_daily_stats_sheets():
     try:
         sh = get_spreadsheet()
         if sh is None: return {}
-        try: ws = sh.worksheet("DailyStats")
-        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1"); return {}
+        try:
+            ws = sh.worksheet("DailyStats")
+        except:
+            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+            return {}
         val = ws.acell('A1').value
         return json.loads(val) if val else {}
-    except: return {}
+    except:
+        return {}
 
 def save_daily_stats_sheets(stats):
     try:
         sh = get_spreadsheet()
         if sh is None: return
-        try: ws = sh.worksheet("DailyStats")
-        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+        try:
+            ws = sh.worksheet("DailyStats")
+        except:
+            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
         ws.update('A1', [[json.dumps(stats)]])
-    except: pass
+    except:
+        pass
 
 def load_war_history_sheets():
     try:
         sh = get_spreadsheet()
         if sh is None: return {}
-        try: ws = sh.worksheet("WarHistory")
-        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1"); return {}
+        try:
+            ws = sh.worksheet("WarHistory")
+        except:
+            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+            return {}
         val = ws.acell('A1').value
         return json.loads(val) if val else {}
-    except: return {}
+    except:
+        return {}
 
 def save_war_history_sheets(history):
     try:
         sh = get_spreadsheet()
         if sh is None: return
-        try: ws = sh.worksheet("WarHistory")
-        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+        try:
+            ws = sh.worksheet("WarHistory")
+        except:
+            ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
         ws.update('A1', [[json.dumps(history)]])
-    except: pass
+    except:
+        pass
 
-# ------------------------------
-# Clan Tags from Google Sheets (initial load)
-# ------------------------------
+# ------------- Clan Tags from Google Sheets -------------
 if 'clan_tags' not in st.session_state:
     st.session_state.clan_tags = load_clan_tags_sheets()
-
 CLAN_TAGS = st.session_state.clan_tags
 
-# ------------------------------
-# Auto‑refresh every 2 minutes
-# ------------------------------
+# ------------- Auto‑refresh -------------
 components.html("""
 <script>
-setTimeout(function() {
-    window.location.reload();
-}, 120000);
+setTimeout(function() { window.location.reload(); }, 120000);
 </script>
 """, height=0)
 
-# ------------------------------
-# Data Fetching
-# ------------------------------
+# ------------- Data Fetching -------------
 def fetch_all_data():
     current_time = time.time()
     if current_time - st.session_state.last_api_fetch > 120 or not st.session_state.cached_clan_data:
@@ -447,9 +454,7 @@ fetch_all_data()
 seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
-# ------------------------------
-# Dynamic CSS based on theme
-# ------------------------------
+# ------------- CSS -------------
 def get_theme_css():
     if st.session_state.theme == "light":
         return """
@@ -508,7 +513,6 @@ def get_theme_css():
         """
 
 st.markdown(get_theme_css(), unsafe_allow_html=True)
-
 st.markdown("""
 <style>
 @keyframes dance {
@@ -533,9 +537,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------
-# Parse API Data (with daily stats for clans and players)
-# ------------------------------
+# ------------- Parse API Data -------------
 all_clans_list = []
 all_players_list = []
 
@@ -561,55 +563,43 @@ for tag, data in st.session_state.cached_clan_data.items():
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
 
-# ---- محاسبه اهدای امروز با تاریخچه (از Google Sheets) ----
+# Daily stats
 daily_stats = load_daily_stats_sheets()
 today_str = datetime.date.today().isoformat()
 yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
-
 yesterday_data = daily_stats.get(yesterday_str, {})
 yesterday_clans = yesterday_data.get("clans", {})
 yesterday_players = yesterday_data.get("players", {})
 
-today_snapshot = {
-    "clans": {},
-    "players": {}
-}
-
+today_snapshot = {"clans": {}, "players": {}}
 for clan in all_clans_list:
     tag = clan['tag']
     today_snapshot["clans"][tag] = clan['donations']
     yesterday_total = yesterday_clans.get(tag)
     clan['donations_today'] = max(0, clan['donations'] - yesterday_total) if yesterday_total is not None else 0
-
 for player in all_players_list:
     tag = player['tag']
     today_snapshot["players"][tag] = player['donations']
     yesterday_total = yesterday_players.get(tag)
     player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
-
 daily_stats[today_str] = today_snapshot
 save_daily_stats_sheets(daily_stats)
 
 if all_clans_list:
     all_clans_list = sorted(all_clans_list, key=lambda x: x['donations'], reverse=True)
-
 current_max = max(c['donations'] for c in all_clans_list) if all_clans_list else 0
 if current_max > st.session_state.max_donations_seen:
     st.session_state.max_donations_seen = current_max
     st.toast(t("record_alert", amount=current_max), icon="🎉")
 
-# ------------------------------
-# Helper functions (filter, etc.)
-# ------------------------------
+# ------------- Helper Functions -------------
 def filter_clans(clan_list, query):
-    if not query:
-        return clan_list
+    if not query: return clan_list
     q = query.lower()
     return [c for c in clan_list if q in c['name'].lower() or q in c['tag'].lower()]
 
 def filter_players(player_list, query):
-    if not query:
-        return player_list
+    if not query: return player_list
     q = query.lower()
     return [p for p in player_list if q in p['name'].lower() or q in p['tag'].lower()]
 
@@ -645,9 +635,7 @@ def add_war_to_history_sheets(clan_tag, war_data):
         history[clan_tag].append(war_data)
     save_war_history_sheets(history)
 
-# ------------------------------
-# Sidebar
-# ------------------------------
+# ------------- Sidebar -------------
 with st.sidebar:
     if st.button(t("about_btn"), use_container_width=True):
         st.session_state.show_about = not st.session_state.show_about
@@ -751,7 +739,6 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
-        # Backup daily stats from Sheets (still possible)
         st.subheader(t("daily_stats_backup"))
         if st.button(t("download_daily")):
             stats = load_daily_stats_sheets()
@@ -766,27 +753,21 @@ with st.sidebar:
             except:
                 st.error("Invalid daily stats file.")
 
-# ------------------------------
-# Force Refresh Button
-# ------------------------------
+# ------------- Force Refresh Button -------------
 col_refresh_btn, _ = st.columns([2, 8])
 with col_refresh_btn:
     if st.button(t("force_refresh"), use_container_width=True):
         st.session_state.last_api_fetch = 0.0
         st.rerun()
 
-# ------------------------------
-# Main Header
-# ------------------------------
+# ------------- Main Header -------------
 col_head, col_dance = st.columns([8, 2])
 with col_head:
     st.markdown(f'<div class="header-container"><div class="header-title" style="font-size:42px;">{t("title")}</div><div class="update-box">{t("last_update", time=time_string)}</div></div>', unsafe_allow_html=True)
 with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
 
-# ------------------------------
-# Routing
-# ------------------------------
+# ------------- Routing -------------
 if st.session_state.selected_clan_tag:
     selected_clan = next((c for c in all_clans_list if c['tag'] == st.session_state.selected_clan_tag), None)
     if selected_clan:
@@ -923,7 +904,7 @@ if st.session_state.selected_clan_tag:
             history = load_war_history_sheets()
             clan_wars = history.get(selected_clan['tag'], [])
             if clan_wars:
-                war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></table></thead><tbody>"
+                war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></tr></thead><tbody>"
                 for w in reversed(clan_wars[-10:]):
                     war_table += f"<tr><td>{w.get('date','?')}</td><td>{w.get('opponentName','Unknown')}</td><td>{w.get('result','?')}</td><td>⭐ {w.get('clanStars',0)}</td><td>{w.get('clanDestruction',0):.1f}%</td></tr>"
                 war_table += "</tbody></table></div>"
@@ -1022,7 +1003,6 @@ else:
             csv_download_button(filtered_clans, "clans.csv",
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","score"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("score")])
-            st.markdown(f"<div class='table-wrapper'><table class='custom-table'><thead><tr><th>{t('rank')}</th><th>{t('clan')}</th><th>{t('clan_name_column')}</th><th>{t('leader')}</th><th>{t('members')}</th><th>🔥 {t('donated')}</th><th>🔥 {t('donated_today')}</th><th>📥 {t('received')}</th><th>⭐ {t('score')}</th></tr></thead><tbody>", unsafe_allow_html=True)
             for rank, clan in enumerate(filtered_clans, 1):
                 col_r, col_img, col_name, col_ldr, col_mem, col_don, col_today, col_rec, col_score = st.columns([1,1,4,2,2,2,2,2,2])
                 with col_r: st.write(f"**{rank}**")
@@ -1038,7 +1018,6 @@ else:
                 with col_rec: st.write(f"{clan['received']:,}")
                 with col_score: st.write(f"{clan_score(clan):,}")
                 st.divider()
-            st.markdown("</tbody></table></div>", unsafe_allow_html=True)
         else:
             st.info(t("no_clan_found"))
 
