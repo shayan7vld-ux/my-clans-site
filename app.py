@@ -297,7 +297,7 @@ if 'selected_clan_tag' not in st.session_state:
 if 'selected_player_tag' not in st.session_state:
     st.session_state.selected_player_tag = None
 if 'last_api_fetch' not in st.session_state:
-    st.session_state.last_api_fetch = 0.0
+    st.session_state.last_api_fetch = time.time()
 if 'cached_clan_data' not in st.session_state:
     st.session_state.cached_clan_data = {}
 if 'last_visit' not in st.session_state:
@@ -318,7 +318,7 @@ if 'last_sheets_refresh' not in st.session_state:
     st.session_state.last_sheets_refresh = 0
 
 # ------------------------------
-# Google Sheets helpers (حافظهٔ هوشمند با یک برگهٔ AppData)
+# Google Sheets helpers (with migration)
 # ------------------------------
 SHEETS_REFRESH_INTERVAL = 300  # seconds
 
@@ -347,8 +347,73 @@ def get_spreadsheet():
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
+def migrate_old_data_to_appdata():
+    """اگر برگه‌های قدیمی وجود داشته باشند و AppData خالی باشد، داده‌ها را یکپارچه می‌کند."""
+    sh = get_spreadsheet()
+    if sh is None:
+        return
+    try:
+        # بررسی وجود AppData
+        try:
+            ws_app = sh.worksheet("AppData")
+            val = ws_app.acell('A1').value
+            if val and json.loads(val):
+                return
+        except gspread.exceptions.WorksheetNotFound:
+            pass
+
+        old_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+
+        # ClanTags
+        try:
+            ws = sh.worksheet("ClanTags")
+            tags = ws.col_values(1)
+            old_data['clan_tags'] = [t.strip() for t in tags if t.strip()]
+        except:
+            pass
+
+        # DailyStats
+        try:
+            ws = sh.worksheet("DailyStats")
+            val = ws.acell('A1').value
+            old_data['daily_stats'] = json.loads(val) if val else {}
+        except:
+            pass
+
+        # MemberSnapshots
+        try:
+            ws = sh.worksheet("MemberSnapshots")
+            val = ws.acell('A1').value
+            old_data['member_snaps'] = json.loads(val) if val else {}
+        except:
+            pass
+
+        # WarHistory
+        try:
+            ws = sh.worksheet("WarHistory")
+            val = ws.acell('A1').value
+            old_data['war_history'] = json.loads(val) if val else {}
+        except:
+            pass
+
+        # ذخیره در AppData
+        try:
+            ws_app = sh.worksheet("AppData")
+        except:
+            ws_app = sh.add_worksheet("AppData", rows="2", cols="1")
+        ws_app.update('A1', [[json.dumps(old_data)]])
+
+        # حذف برگه‌های قدیمی (اختیاری)
+        # for sheet_name in ["ClanTags", "DailyStats", "MemberSnapshots", "WarHistory"]:
+        #     try:
+        #         sh.del_worksheet(sh.worksheet(sheet_name))
+        #     except:
+        #         pass
+    except Exception as e:
+        st.warning(f"Migration error: {e}")
+
 def refresh_app_data():
-    """Read all data from the single 'AppData' sheet (one JSON cell)."""
+    migrate_old_data_to_appdata()
     sh = get_spreadsheet()
     if sh is None:
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
@@ -372,7 +437,6 @@ def refresh_app_data():
         return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
 
 def save_app_data(data):
-    """Save the data dictionary to the 'AppData' sheet."""
     try:
         sh = get_spreadsheet()
         if sh is None: return
@@ -381,7 +445,6 @@ def save_app_data(data):
         except:
             ws = sh.add_worksheet("AppData", rows="2", cols="1")
         ws.update('A1', [[json.dumps(data)]])
-        # Update local cache immediately
         st.session_state.app_data = data
         st.session_state.last_sheets_refresh = time.time()
     except Exception as e:
@@ -619,7 +682,7 @@ for tag, data in st.session_state.cached_clan_data.items():
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
 
-# ---- Daily stats & Lost calculation (using the unified sheets functions) ----
+# ---- Daily stats & Lost calculation ----
 daily_stats = load_daily_stats_sheets()
 today_str = datetime.date.today().isoformat()
 yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
@@ -677,7 +740,7 @@ if current_max > st.session_state.max_donations_seen:
     st.toast(t("record_alert", amount=current_max), icon="🎉")
 
 # ------------------------------
-# Helper functions (filter, etc.)
+# Helper functions
 # ------------------------------
 def filter_clans(clan_list, query):
     if not query: return clan_list
