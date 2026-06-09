@@ -12,13 +12,9 @@ import streamlit.components.v1 as components
 from deep_translator import GoogleTranslator
 TRANSLATOR_AVAILABLE = True
 
-# ----- Google Sheets Libraries -----
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-# ------------------------------
-# Basic Configuration
-# ------------------------------
 st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="expanded")
 
 try:
@@ -29,9 +25,6 @@ except KeyError:
 
 headers = {"Authorization": f"Bearer {API_KEY}"}
 
-# ------------------------------
-# Language System
-# ------------------------------
 LANGUAGES = {
     "en": "🇺🇸 English", "fa": "🇮🇷 فارسی", "es": "🇪🇸 Español", "fr": "🇫🇷 Français",
     "de": "🇩🇪 Deutsch", "ar": "🇸🇦 العربية", "tr": "🇹🇷 Türkçe", "ru": "🇷🇺 Русский",
@@ -48,57 +41,38 @@ TRANSLATIONS = {
         "search": "🔍 Search",
         "search_placeholder": "Name or tag (clan/player)",
         "admin_panel": "🔐 Admin Panel",
-        "username": "Username",
-        "password": "Password",
-        "login": "Login",
-        "logout": "Logout",
+        "username": "Username", "password": "Password",
+        "login": "Login", "logout": "Logout",
         "logged_in": "You are logged in as admin.",
         "last_visit_btn": "📂 Last Visit",
         "last_visit_info": "Last visit: {time}",
-        "auto_refresh_caption": "Page auto-refreshes every 2 minutes.",
-        "add_clan": "➕ Add Clan",
-        "tag_input": "Clan tag (#XXXXXX)",
-        "add_btn": "Add",
-        "tag_exists": "This tag already exists.",
+        "auto_refresh_caption": "Page auto-refreshes every 5 minutes.",
+        "add_clan": "➕ Add Clan", "tag_input": "Clan tag (#XXXXXX)",
+        "add_btn": "Add", "tag_exists": "This tag already exists.",
         "invalid_tag": "Enter a valid tag starting with #",
-        "added_success": "Clan {tag} added! Refresh to see changes.",
-        "tracked_clans": "Tracked Clans:",
-        "del_btn": "❌",
+        "added_success": "Clan {tag} added!",
+        "tracked_clans": "Tracked Clans:", "del_btn": "❌",
         "export_import": "📥 Export / 📤 Import Tags",
-        "download_json": "Download Tags (JSON)",
-        "upload_json": "Upload Tags (JSON)",
+        "download_json": "Download Tags (JSON)", "upload_json": "Upload Tags (JSON)",
         "import_success": "Tags replaced successfully.",
-        "invalid_json": "Invalid file format.",
-        "error_reading": "Error reading file.",
+        "invalid_json": "Invalid file format.", "error_reading": "Error reading file.",
         "clan_tab": "🏆 Current Season Clans",
         "player_tab": "🔥 Top Season Players",
         "legend_tab": "⭐ Level 300+ Heroes",
-        "clan_count": "Tracked Clans ({count})",
-        "player_count": "Top Players ({count})",
-        "legend_count": "Heroes Level 300+ ({count})",
-        "rank": "Rank",
-        "clan": "Clan",
-        "name": "Name",
-        "leader": "Leader",
-        "members": "Members",
-        "donated": "Donated",
-        "donated_today": "Today",
-        "received": "Received",
-        "lost": "Lost",
+        "rank": "Rank", "clan": "Clan", "name": "Name",
+        "leader": "Leader", "members": "Members",
+        "donated": "Donated", "donated_today": "Today",
+        "received": "Received", "lost": "Lost",
         "csv_download": "📥 Download CSV",
         "no_clan_found": "No clan found with these criteria.",
         "no_player_found": "No player found.",
         "no_legend_found": "No players over Level 300 found.",
         "back_btn": "⬅️ Back to Leaderboard",
         "description": "📋 **Description:** {desc}",
-        "total_donated": "Total Donated",
-        "total_received": "Total Received",
-        "war_wins": "War Wins",
-        "members_tab": "👥 Members",
-        "war_tab": "⚔️ War League",
-        "regular_war_tab": "⚔️ Regular War",
-        "capital_tab": "🏛️ Capital",
-        "player_profile": "Player Profile",
+        "total_donated": "Total Donated", "total_received": "Total Received",
+        "war_wins": "War Wins", "members_tab": "👥 Members",
+        "war_tab": "⚔️ War League", "regular_war_tab": "⚔️ Regular War",
+        "capital_tab": "🏛️ Capital", "player_profile": "Player Profile",
         "close_profile": "Close Profile",
         "war_not_found": "This clan is not currently in a war league.",
         "war_error": "Error fetching war league data.",
@@ -107,39 +81,20 @@ TRANSLATIONS = {
         "capital_not_found": "Capital data not available.",
         "capital_error": "Error fetching capital data.",
         "record_alert": "🔥 New highest donation record: {amount:,}!",
-        "theme_btn": "🌓 Light/Dark Mode",
-        "lang_btn": "🌐 Language",
-        "english": "English",
-        "persian": "فارسی",
-        "clan_tag_column": "Tag",
-        "clan_name_column": "Clan Name",
-        "player_name_column": "Player Name",
-        "role": "Role",
-        "level": "Level",
-        "donations": "Donated",
-        "received_col": "Received",
+        "theme_btn": "🌓 Light/Dark Mode", "lang_btn": "🌐 Language",
         "language_select": "Language",
-        "about_title": "📦 About Us",
-        "about_creators": "Creators",
-        "about_support": "Support",
-        "about_close": "Close",
-        "about_btn": "🧊 About",
-        "war_round": "Round {number}",
-        "war_clan_stars": "⭐ Stars",
-        "war_clan_destruction": "💥 Destruction",
-        "capital_hall_level": "Capital Hall Level",
-        "capital_league": "Capital League",
+        "about_title": "📦 About Us", "about_creators": "Creators",
+        "about_support": "Support", "about_close": "Close",
+        "about_btn": "🧊 About", "war_round": "Round {number}",
+        "capital_hall_level": "Capital Hall Level", "capital_league": "Capital League",
         "daily_stats_backup": "🔄 Daily Stats Backup",
-        "download_daily": "📥 Download Daily Stats",
-        "upload_daily": "📤 Upload Daily Stats (JSON)",
+        "download_daily": "📥 Download Daily Stats", "upload_daily": "📤 Upload Daily Stats (JSON)",
         "full_backup_title": "📦 Full App Backup",
         "download_full_backup": "📥 Download Full Backup (JSON)",
         "upload_full_backup": "📤 Restore Full Backup (JSON)",
         "full_restore_success": "Full backup restored successfully!",
         "full_restore_invalid": "Invalid backup file.",
-        "prev_page": "⬅️ Previous",
-        "next_page": "Next ➡️",
-        "page": "Page",
+        "prev_page": "⬅️ Previous", "next_page": "Next ➡️", "page": "Page",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -148,57 +103,38 @@ TRANSLATIONS = {
         "search": "🔍 جستجو",
         "search_placeholder": "نام یا تگ (کلن/بازیکن)",
         "admin_panel": "🔐 پنل مدیریت",
-        "username": "نام کاربری",
-        "password": "رمز عبور",
-        "login": "ورود",
-        "logout": "خروج",
+        "username": "نام کاربری", "password": "رمز عبور",
+        "login": "ورود", "logout": "خروج",
         "logged_in": "شما به‌عنوان مدیر وارد شده‌اید.",
         "last_visit_btn": "📂 آخرین بازدید",
         "last_visit_info": "آخرین بازدید: {time}",
-        "auto_refresh_caption": "صفحه هر ۲ دقیقه به‌طور خودکار ریلود می‌شود.",
-        "add_clan": "➕ افزودن کلن",
-        "tag_input": "تگ کلن (#XXXXXX)",
-        "add_btn": "افزودن",
-        "tag_exists": "این تگ از قبل وجود دارد.",
+        "auto_refresh_caption": "صفحه هر ۵ دقیقه به‌طور خودکار ریلود می‌شود.",
+        "add_clan": "➕ افزودن کلن", "tag_input": "تگ کلن (#XXXXXX)",
+        "add_btn": "افزودن", "tag_exists": "این تگ از قبل وجود دارد.",
         "invalid_tag": "تگ معتبر وارد کنید (با # شروع شود).",
-        "added_success": "کلن {tag} اضافه شد. برای مشاهده رفرش کنید.",
-        "tracked_clans": "کلن‌های ردیابی‌شده:",
-        "del_btn": "❌",
+        "added_success": "کلن {tag} اضافه شد.",
+        "tracked_clans": "کلن‌های ردیابی‌شده:", "del_btn": "❌",
         "export_import": "📥 خروجی / 📤 ورودی تگ‌ها",
-        "download_json": "دانلود تگ‌ها (JSON)",
-        "upload_json": "بارگذاری فایل تگ‌ها (JSON)",
+        "download_json": "دانلود تگ‌ها (JSON)", "upload_json": "بارگذاری فایل تگ‌ها (JSON)",
         "import_success": "تگ‌ها با موفقیت جایگزین شدند.",
-        "invalid_json": "فرمت فایل نامعتبر است.",
-        "error_reading": "خطا در خواندن فایل.",
+        "invalid_json": "فرمت فایل نامعتبر است.", "error_reading": "خطا در خواندن فایل.",
         "clan_tab": "🏆 کلن‌های فصل جاری",
         "player_tab": "🔥 برترین بازیکنان فصل",
         "legend_tab": "⭐ قهرمانان لول ۳۰۰+",
-        "clan_count": "کلن‌های ردیابی‌شده ({count})",
-        "player_count": "برترین بازیکنان ({count})",
-        "legend_count": "قهرمانان لول ۳۰۰+ ({count})",
-        "rank": "رتبه",
-        "clan": "کلن",
-        "name": "نام",
-        "leader": "لیدر",
-        "members": "اعضا",
-        "donated": "اهدا",
-        "donated_today": "امروز",
-        "received": "دریافت",
-        "lost": "از دست رفته",
+        "rank": "رتبه", "clan": "کلن", "name": "نام",
+        "leader": "لیدر", "members": "اعضا",
+        "donated": "اهدا", "donated_today": "امروز",
+        "received": "دریافت", "lost": "از دست رفته",
         "csv_download": "📥 دانلود CSV",
         "no_clan_found": "کلنی با این مشخصات یافت نشد.",
         "no_player_found": "بازیکنی پیدا نشد.",
         "no_legend_found": "هیچ بازیکنی با لول بالای ۳۰۰ پیدا نشد.",
         "back_btn": "⬅️ بازگشت به لیدربورد",
         "description": "📋 **توضیحات:** {desc}",
-        "total_donated": "کل اهدا",
-        "total_received": "کل دریافت",
-        "war_wins": "پیروزی در جنگ",
-        "members_tab": "👥 اعضا",
-        "war_tab": "⚔️ لیگ جنگ",
-        "regular_war_tab": "⚔️ وار عادی",
-        "capital_tab": "🏛️ کپیتال",
-        "player_profile": "پروفایل بازیکن",
+        "total_donated": "کل اهدا", "total_received": "کل دریافت",
+        "war_wins": "پیروزی در جنگ", "members_tab": "👥 اعضا",
+        "war_tab": "⚔️ لیگ جنگ", "regular_war_tab": "⚔️ وار عادی",
+        "capital_tab": "🏛️ کپیتال", "player_profile": "پروفایل بازیکن",
         "close_profile": "بستن پروفایل",
         "war_not_found": "این کلن در حال حاضر در لیگ جنگ نیست.",
         "war_error": "خطا در دریافت اطلاعات لیگ جنگ.",
@@ -207,73 +143,37 @@ TRANSLATIONS = {
         "capital_not_found": "اطلاعات کپیتال در دسترس نیست.",
         "capital_error": "خطا در دریافت اطلاعات کپیتال.",
         "record_alert": "🔥 رکورد جدید بالاترین اهدا: {amount:,}!",
-        "theme_btn": "🌓 تغییر تم روشن/تاریک",
-        "lang_btn": "🌐 زبان",
-        "english": "English",
-        "persian": "فارسی",
-        "clan_tag_column": "تگ",
-        "clan_name_column": "نام کلن",
-        "player_name_column": "نام بازیکن",
-        "role": "نقش",
-        "level": "سطح",
-        "donations": "اهدا",
-        "received_col": "دریافت",
+        "theme_btn": "🌓 تغییر تم روشن/تاریک", "lang_btn": "🌐 زبان",
         "language_select": "زبان",
-        "about_title": "📦 درباره ما",
-        "about_creators": "سازندگان",
-        "about_support": "پشتیبانی",
-        "about_close": "بستن",
-        "about_btn": "🧊 درباره ما",
-        "war_round": "راند {number}",
-        "war_clan_stars": "⭐ ستاره‌ها",
-        "war_clan_destruction": "💥 تخریب",
-        "capital_hall_level": "سطح تالار کپیتال",
-        "capital_league": "لیگ کپیتال",
+        "about_title": "📦 درباره ما", "about_creators": "سازندگان",
+        "about_support": "پشتیبانی", "about_close": "بستن",
+        "about_btn": "🧊 درباره ما", "war_round": "راند {number}",
+        "capital_hall_level": "سطح تالار کپیتال", "capital_league": "لیگ کپیتال",
         "daily_stats_backup": "🔄 پشتیبان آمار روزانه",
-        "download_daily": "📥 دانلود آمار روزانه",
-        "upload_daily": "📤 بارگذاری آمار روزانه (JSON)",
+        "download_daily": "📥 دانلود آمار روزانه", "upload_daily": "📤 بارگذاری آمار روزانه (JSON)",
         "full_backup_title": "📦 پشتیبان کامل برنامه",
         "download_full_backup": "📥 دانلود پشتیبان کامل (JSON)",
         "upload_full_backup": "📤 بازیابی پشتیبان کامل (JSON)",
         "full_restore_success": "پشتیبان کامل با موفقیت بازیابی شد!",
         "full_restore_invalid": "فایل پشتیبان نامعتبر است.",
-        "prev_page": "⬅️ قبلی",
-        "next_page": "بعدی ➡️",
-        "page": "صفحه",
+        "prev_page": "⬅️ قبلی", "next_page": "بعدی ➡️", "page": "صفحه",
     }
 }
 
 def auto_translate_dict(target_lang):
-    if not TRANSLATOR_AVAILABLE:
-        return None
+    if not TRANSLATOR_AVAILABLE: return None
     try:
         translator = GoogleTranslator(source='en', target=target_lang)
         en_dict = TRANSLATIONS["en"]
         translated = {}
         skip_keys = {"lang_btn", "english", "persian", "language_select", "about_btn"}
-        placeholder_pattern = re.compile(r'\{[a-zA-Z_]+\}')
-        keys_to_translate = []
-        texts_to_translate = []
-        placeholder_map = {}
         for key, value in en_dict.items():
             if key in skip_keys:
                 translated[key] = value
             else:
-                placeholders = placeholder_pattern.findall(value)
-                masked = value
-                for i, ph in enumerate(placeholders):
-                    masked = masked.replace(ph, f'__PH{i}__')
-                texts_to_translate.append(masked)
-                keys_to_translate.append(key)
-                placeholder_map[key] = placeholders
-        if texts_to_translate:
-            translated_texts = translator.translate_batch(texts_to_translate)
-            for key, text in zip(keys_to_translate, translated_texts):
-                for i, ph in enumerate(placeholder_map[key]):
-                    text = text.replace(f'__PH{i}__', ph)
-                translated[key] = text
+                translated[key] = translator.translate(value)
         return translated
-    except Exception as e:
+    except:
         return None
 
 def t(key, **kwargs):
@@ -293,9 +193,6 @@ def t(key, **kwargs):
         text = text.format(**kwargs)
     return text
 
-# ------------------------------
-# Session State Initialization
-# ------------------------------
 if 'selected_clan_tag' not in st.session_state:
     st.session_state.selected_clan_tag = None
 if 'selected_player_tag' not in st.session_state:
@@ -326,6 +223,8 @@ if 'app_data' not in st.session_state:
     st.session_state.app_data = None
 if 'last_sheets_refresh' not in st.session_state:
     st.session_state.last_sheets_refresh = 0
+if 'last_sheets_write' not in st.session_state:
+    st.session_state.last_sheets_write = 0
 if 'clan_page' not in st.session_state:
     st.session_state.clan_page = 1
 if 'player_page' not in st.session_state:
@@ -334,11 +233,8 @@ if 'legend_page' not in st.session_state:
     st.session_state.legend_page = 1
 
 ITEMS_PER_PAGE = 50
-
-# ------------------------------
-# Google Sheets helpers (FULLY ROBUST VERSION)
-# ------------------------------
-SHEETS_REFRESH_INTERVAL = 300
+SHEETS_READ_INTERVAL = 600
+SHEETS_WRITE_INTERVAL = 300
 
 @st.cache_resource
 def get_gsheet_client():
@@ -349,8 +245,7 @@ def get_gsheet_client():
             ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
         )
         return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"Google Sheets connection error: {e}")
+    except:
         return None
 
 @st.cache_resource
@@ -361,51 +256,35 @@ def get_spreadsheet():
     try:
         sheet_id = "1_OOYWwm9HQvgv4Q4fIiE4CtEGKHHUjGPxLH6Qb5tnTE"
         return client.open_by_key(sheet_id)
-    except Exception as e:
-        st.error(f"Cannot open spreadsheet: {e}")
+    except:
         return None
 
 def get_or_create_worksheet(sh, name, rows=500, cols=1):
     try:
         return sh.worksheet(name)
-    except gspread.exceptions.WorksheetNotFound:
+    except:
         try:
             return sh.add_worksheet(title=name, rows=str(rows), cols=str(cols))
-        except gspread.exceptions.APIError as e:
-            if "already exists" in str(e).lower():
-                return sh.worksheet(name)
-            raise e
+        except:
+            return None
 
-def save_json_in_rows(ws, data):
+def save_json_safe(ws, data):
     try:
         json_str = json.dumps(data, ensure_ascii=False)
-    except:
-        json_str = "{}"
-    chunks = [json_str[i:i+45000] for i in range(0, len(json_str), 45000)]
-    ws.clear()
-    if chunks:
-        try:
+        chunks = [json_str[i:i+45000] for i in range(0, len(json_str), 45000)]
+        ws.clear()
+        if chunks:
             ws.update('A1:A'+str(len(chunks)), [[chunk] for chunk in chunks], value_input_option='RAW')
-        except gspread.exceptions.APIError as e:
-            if len(chunks) > 1:
-                ws.update('A1:A1', [[""]] * len(chunks))
-                for idx, chunk in enumerate(chunks, 1):
-                    ws.update(f'A{idx}', [[chunk]], value_input_option='RAW')
-            else:
-                raise e
+    except:
+        pass
 
-def load_json_from_rows(ws):
+def load_json_safe(ws):
     try:
         values = ws.col_values(1)
         if values and values[0]:
-            combined = ''.join(values)
-            return json.loads(combined)
+            return json.loads(''.join(values))
         return {}
     except:
-        try:
-            ws.update('A1', [["{}"]], value_input_option='RAW')
-        except:
-            pass
         return {}
 
 def refresh_app_data():
@@ -416,68 +295,60 @@ def refresh_app_data():
     data = {}
     try:
         ws = get_or_create_worksheet(sh, "ClanTags", rows=1000)
-        tags = ws.col_values(1)
-        data['clan_tags'] = [t.strip() for t in tags if t.strip()]
+        if ws:
+            tags = ws.col_values(1)
+            data['clan_tags'] = [t.strip() for t in tags if t.strip()]
+        else:
+            data['clan_tags'] = []
     except:
         data['clan_tags'] = []
 
-    try:
-        ws = get_or_create_worksheet(sh, "DailyStats", rows=2000)
-        data['daily_stats'] = load_json_from_rows(ws)
-    except:
-        data['daily_stats'] = {}
-
-    try:
-        ws = get_or_create_worksheet(sh, "MemberSnapshots", rows=2000)
-        data['member_snaps'] = load_json_from_rows(ws)
-    except:
-        data['member_snaps'] = {}
-
-    try:
-        ws = get_or_create_worksheet(sh, "WarHistory", rows=500)
-        data['war_history'] = load_json_from_rows(ws)
-    except:
-        data['war_history'] = {}
+    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history")]:
+        try:
+            ws = get_or_create_worksheet(sh, name, rows=2000)
+            data[key] = load_json_safe(ws) if ws else {}
+        except:
+            data[key] = {}
 
     return data
 
 def save_app_data(data):
+    if st.session_state.app_data is not None and data == st.session_state.app_data:
+        return
+
+    now = time.time()
+    if now - st.session_state.last_sheets_write < SHEETS_WRITE_INTERVAL:
+        st.session_state.app_data = data
+        return
+
     sh = get_spreadsheet()
     if sh is None: return
 
     try:
         ws = get_or_create_worksheet(sh, "ClanTags", rows=1000)
-        ws.clear()
-        if data.get('clan_tags'):
-            ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']], value_input_option='RAW')
-    except Exception as e:
-        st.error(f"Error saving ClanTags: {e}")
+        if ws:
+            ws.clear()
+            if data.get('clan_tags'):
+                ws.update('A1:A'+str(len(data['clan_tags'])), [[t] for t in data['clan_tags']], value_input_option='RAW')
+    except:
+        pass
 
-    try:
-        ws = get_or_create_worksheet(sh, "DailyStats", rows=2000)
-        save_json_in_rows(ws, data.get('daily_stats', {}))
-    except Exception as e:
-        st.error(f"Error saving DailyStats: {e}")
-
-    try:
-        ws = get_or_create_worksheet(sh, "MemberSnapshots", rows=2000)
-        save_json_in_rows(ws, data.get('member_snaps', {}))
-    except Exception as e:
-        st.error(f"Error saving MemberSnapshots: {e}")
-
-    try:
-        ws = get_or_create_worksheet(sh, "WarHistory", rows=500)
-        save_json_in_rows(ws, data.get('war_history', {}))
-    except Exception as e:
-        st.error(f"Error saving WarHistory: {e}")
+    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history")]:
+        try:
+            ws = get_or_create_worksheet(sh, name, rows=2000)
+            if ws:
+                save_json_safe(ws, data.get(key, {}))
+        except:
+            pass
 
     st.session_state.app_data = data
-    st.session_state.last_sheets_refresh = time.time()
+    st.session_state.last_sheets_write = now
+    st.session_state.last_sheets_refresh = now
 
 def get_app_data():
     now = time.time()
     if (st.session_state.app_data is None or 
-        (now - st.session_state.last_sheets_refresh) > SHEETS_REFRESH_INTERVAL):
+        (now - st.session_state.last_sheets_refresh) > SHEETS_READ_INTERVAL):
         try:
             st.session_state.app_data = refresh_app_data()
         except:
@@ -518,28 +389,19 @@ def save_war_history_sheets(history):
     data['war_history'] = history
     save_app_data(data)
 
-# ------------------------------
-# Clan Tags from Google Sheets
-# ------------------------------
 if 'clan_tags' not in st.session_state:
     st.session_state.clan_tags = load_clan_tags_sheets()
 
 CLAN_TAGS = st.session_state.clan_tags
 
-# ------------------------------
-# Auto‑refresh every 2 minutes
-# ------------------------------
 components.html("""
 <script>
 setTimeout(function() {
     window.location.reload();
-}, 120000);
+}, 300000);
 </script>
 """, height=0)
 
-# ------------------------------
-# Data Fetching
-# ------------------------------
 def fetch_all_data():
     current_time = time.time()
     if current_time - st.session_state.last_api_fetch > 120 or not st.session_state.cached_clan_data:
@@ -561,9 +423,6 @@ fetch_all_data()
 seconds_ago = int(time.time() - st.session_state.last_api_fetch)
 time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
-# ------------------------------
-# Dynamic CSS based on theme
-# ------------------------------
 def get_theme_css():
     if st.session_state.theme == "light":
         return """
@@ -579,31 +438,10 @@ def get_theme_css():
         .glass-card { background: rgba(255,255,255,0.4) !important; border-color: rgba(0,0,0,0.1) !important; border-top-color: #ffaa45 !important; }
         .glass-metric { background: rgba(255,255,255,0.3); border-color: rgba(0,0,0,0.05); }
         .lvl-badge, .th-badge { color: #fff; }
-        .war-card {
-            background: rgba(255,255,255,0.8);
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 12px;
-            padding: 10px;
-            margin: 10px 0;
-            backdrop-filter: blur(10px);
-        }
-        .clan-card {
-            background: rgba(255,255,255,0.6) !important;
-            border: 1px solid rgba(0,0,0,0.1) !important;
-            border-radius: 16px;
-            padding: 15px;
-            margin-bottom: 12px;
-            backdrop-filter: blur(20px);
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-        }
-        .clan-card:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        }
-        .war-card h4 { margin-top: 0; }
-        .war-clan-name { font-weight: bold; }
+        .war-card { background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 10px; margin: 10px 0; backdrop-filter: blur(10px); }
+        .clan-card { background: rgba(255,255,255,0.6) !important; border: 1px solid rgba(0,0,0,0.1) !important; border-radius: 16px; padding: 15px; margin-bottom: 12px; backdrop-filter: blur(20px); transition: all 0.2s; display: flex; align-items: center; }
+        .clan-card:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .war-card h4 { margin-top: 0; } .war-clan-name { font-weight: bold; }
         .war-stats { display: flex; justify-content: space-between; }
         .stat-label { font-size: 10px; color: #6c757d; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
@@ -622,33 +460,11 @@ def get_theme_css():
         .custom-table tr:hover { background-color: rgba(255, 255, 255, 0.04); }
         .glass-card { background: rgba(255, 255, 255, 0.04) !important; border-color: rgba(255, 255, 255, 0.1) !important; border-top-color: #ffaa45 !important; }
         .glass-metric { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); }
-        .lvl-badge { background-color: #1f6feb; }
-        .th-badge { background-color: #da70d6; }
-        .war-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 10px;
-            margin: 10px 0;
-            backdrop-filter: blur(10px);
-        }
-        .clan-card {
-            background: rgba(255,255,255,0.05) !important;
-            border: 1px solid rgba(255,255,255,0.1) !important;
-            border-radius: 16px;
-            padding: 15px;
-            margin-bottom: 12px;
-            backdrop-filter: blur(20px);
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-        }
-        .clan-card:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        }
-        .war-card h4 { color: #ffaa45; margin-top: 0; }
-        .war-clan-name { font-weight: bold; color: #f0f6fc; }
+        .lvl-badge { background-color: #1f6feb; } .th-badge { background-color: #da70d6; }
+        .war-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; margin: 10px 0; backdrop-filter: blur(10px); }
+        .clan-card { background: rgba(255,255,255,0.05) !important; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 16px; padding: 15px; margin-bottom: 12px; backdrop-filter: blur(20px); transition: all 0.2s; display: flex; align-items: center; }
+        .clan-card:hover { transform: scale(1.02); box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .war-card h4 { color: #ffaa45; margin-top: 0; } .war-clan-name { font-weight: bold; color: #f0f6fc; }
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
         .stat-label { font-size: 10px; color: #8b949e; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
@@ -682,9 +498,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ------------------------------
-# Parse API Data (with daily stats for clans and players)
-# ------------------------------
 all_clans_list = []
 all_players_list = []
 
@@ -710,7 +523,6 @@ for tag, data in st.session_state.cached_clan_data.items():
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
 
-# ---- Daily stats & Lost calculation ----
 daily_stats = load_daily_stats_sheets()
 today_str = datetime.date.today().isoformat()
 yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
@@ -741,16 +553,13 @@ for clan in all_clans_list:
     tag = clan['tag']
     current_members = {m['tag']: m['donations'] for m in clan['members_raw']}
     last_members = member_snaps.get(tag, {})
-
     left_players = set(last_members.keys()) - set(current_members.keys())
     new_lost = sum(last_members[p] for p in left_players)
-
     yesterday_don = yesterday_clans.get(tag)
     if yesterday_don is not None and yesterday_don > 0 and clan['donations'] < yesterday_don * 0.5:
         season_lost[tag] = 0
     else:
         season_lost[tag] = season_lost.get(tag, 0) + new_lost
-
     clan['lost_season'] = season_lost[tag]
     new_snaps[tag] = current_members
 
@@ -767,9 +576,6 @@ if current_max > st.session_state.max_donations_seen:
     st.session_state.max_donations_seen = current_max
     st.toast(t("record_alert", amount=current_max), icon="🎉")
 
-# ------------------------------
-# Helper functions
-# ------------------------------
 def filter_clans(clan_list, query):
     if not query: return clan_list
     q = query.lower()
@@ -836,9 +642,6 @@ def show_pagination(total_pages, page, total, page_key):
                 st.session_state[page_key] = min(total_pages, page + 1)
                 st.rerun()
 
-# ------------------------------
-# Sidebar
-# ------------------------------
 with st.sidebar:
     if st.button(t("about_btn"), use_container_width=True):
         now = time.time()
@@ -847,11 +650,9 @@ with st.sidebar:
         else:
             st.session_state.about_click_count = 1
         st.session_state.last_about_click = now
-
         if st.session_state.about_click_count >= 3:
             st.session_state.show_admin_login = True
             st.session_state.about_click_count = 0
-
         st.session_state.show_about = not st.session_state.show_about
         st.rerun()
 
@@ -890,7 +691,6 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
-    # Admin Panel (hidden)
     if st.session_state.admin_authenticated:
         st.markdown("---")
         st.header(t("admin_panel"))
@@ -999,27 +799,18 @@ with st.sidebar:
                 st.session_state.show_admin_login = False
                 st.rerun()
 
-# ------------------------------
-# Force Refresh Button
-# ------------------------------
 col_refresh_btn, _ = st.columns([2, 8])
 with col_refresh_btn:
     if st.button(t("force_refresh"), use_container_width=True):
         st.session_state.last_api_fetch = 0.0
         st.rerun()
 
-# ------------------------------
-# Main Header
-# ------------------------------
 col_head, col_dance = st.columns([8, 2])
 with col_head:
     st.markdown(f'<div class="header-container"><div class="header-title" style="font-size:42px;">{t("title")}</div><div class="update-box">{t("last_update", time=time_string)}</div></div>', unsafe_allow_html=True)
 with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
 
-# ------------------------------
-# Routing
-# ------------------------------
 if st.session_state.selected_clan_tag:
     selected_clan = next((c for c in all_clans_list if c['tag'] == st.session_state.selected_clan_tag), None)
     if selected_clan:
