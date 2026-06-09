@@ -12,6 +12,10 @@ import streamlit.components.v1 as components
 from deep_translator import GoogleTranslator
 TRANSLATOR_AVAILABLE = True
 
+# ----- Google Sheets Libraries -----
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+
 # ------------------------------
 # Basic Configuration & Secrets
 # ------------------------------
@@ -312,71 +316,98 @@ if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
 # ------------------------------
-# Daily Stats (for today's donations of clans AND players)
+# Google Sheets helpers
 # ------------------------------
-DAILY_STATS_FILE = "daily_stats.json"
+@st.cache_resource
+def get_gsheet_client():
+    try:
+        creds_dict = json.loads(st.secrets["gcp_service_account"])
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(
+            creds_dict,
+            ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        )
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Google Sheets connection error: {e}")
+        return None
 
-def load_daily_stats():
-    if os.path.exists(DAILY_STATS_FILE):
-        with open(DAILY_STATS_FILE, "r") as f:
-            return json.load(f)
-    return {}
+def get_spreadsheet():
+    client = get_gsheet_client()
+    if client is None:
+        return None
+    try:
+        sheet_id = st.secrets["SPREADSHEET_ID"]
+        return client.open_by_key(sheet_id)
+    except Exception as e:
+        st.error(f"Cannot open spreadsheet: {e}")
+        return None
 
-def save_daily_stats(stats):
-    with open(DAILY_STATS_FILE, "w") as f:
-        json.dump(stats, f)
+def load_clan_tags_sheets():
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return []
+        try:
+            ws = sh.worksheet("ClanTags")
+        except:
+            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+        tags = ws.col_values(1)
+        return [t.strip() for t in tags if t.strip()]
+    except: return []
 
-def get_today_str():
-    return datetime.date.today().isoformat()
+def save_clan_tags_sheets(tags):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try: ws = sh.worksheet("ClanTags")
+        except: ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+        ws.clear()
+        if tags:
+            ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
+    except: pass
 
-def get_yesterday_str():
-    yesterday = datetime.date.today() - datetime.timedelta(days=1)
-    return yesterday.isoformat()
+def load_daily_stats_sheets():
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return {}
+        try: ws = sh.worksheet("DailyStats")
+        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1"); return {}
+        val = ws.acell('A1').value
+        return json.loads(val) if val else {}
+    except: return {}
+
+def save_daily_stats_sheets(stats):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try: ws = sh.worksheet("DailyStats")
+        except: ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+        ws.update('A1', [[json.dumps(stats)]])
+    except: pass
+
+def load_war_history_sheets():
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return {}
+        try: ws = sh.worksheet("WarHistory")
+        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1"); return {}
+        val = ws.acell('A1').value
+        return json.loads(val) if val else {}
+    except: return {}
+
+def save_war_history_sheets(history):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try: ws = sh.worksheet("WarHistory")
+        except: ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
+        ws.update('A1', [[json.dumps(history)]])
+    except: pass
 
 # ------------------------------
-# War History File
+# Clan Tags from Google Sheets (initial load)
 # ------------------------------
-WAR_HISTORY_FILE = "war_history.json"
-
-def load_war_history():
-    if os.path.exists(WAR_HISTORY_FILE):
-        with open(WAR_HISTORY_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_war_history(history):
-    with open(WAR_HISTORY_FILE, "w") as f:
-        json.dump(history, f)
-
-def add_war_to_history(clan_tag, war_data):
-    history = load_war_history()
-    if clan_tag not in history:
-        history[clan_tag] = []
-    # جلوگیری از ذخیرهٔ تکراری (با بررسی war tag)
-    war_tag = war_data.get("warTag")
-    if not any(w.get("warTag") == war_tag for w in history[clan_tag]):
-        history[clan_tag].append(war_data)
-    save_war_history(history)
-
-# ------------------------------
-# Clan Tags Persistent Storage (empty default)
-# ------------------------------
-DEFAULT_TAGS = []
-
-def load_clan_tags():
-    if os.path.exists("clan_tags.txt"):
-        with open("clan_tags.txt", "r") as f:
-            tags = [line.strip() for line in f if line.strip()]
-        return tags
-    return DEFAULT_TAGS.copy()
-
-def save_clan_tags(tags):
-    with open("clan_tags.txt", "w") as f:
-        for tag in tags:
-            f.write(tag + "\n")
-
 if 'clan_tags' not in st.session_state:
-    st.session_state.clan_tags = load_clan_tags()
+    st.session_state.clan_tags = load_clan_tags_sheets()
 
 CLAN_TAGS = st.session_state.clan_tags
 
@@ -529,10 +560,10 @@ for tag, data in st.session_state.cached_clan_data.items():
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
         })
 
-# ---- محاسبه اهدای امروز با تاریخچه (کلن‌ها و بازیکنان) ----
-daily_stats = load_daily_stats()
-today_str = get_today_str()
-yesterday_str = get_yesterday_str()
+# ---- محاسبه اهدای امروز با تاریخچه (از Google Sheets) ----
+daily_stats = load_daily_stats_sheets()
+today_str = datetime.date.today().isoformat()
+yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
 
 yesterday_data = daily_stats.get(yesterday_str, {})
 yesterday_clans = yesterday_data.get("clans", {})
@@ -556,7 +587,7 @@ for player in all_players_list:
     player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
 
 daily_stats[today_str] = today_snapshot
-save_daily_stats(daily_stats)
+save_daily_stats_sheets(daily_stats)
 
 if all_clans_list:
     all_clans_list = sorted(all_clans_list, key=lambda x: x['donations'], reverse=True)
@@ -567,7 +598,7 @@ if current_max > st.session_state.max_donations_seen:
     st.toast(t("record_alert", amount=current_max), icon="🎉")
 
 # ------------------------------
-# Helper functions
+# Helper functions (filter, etc.)
 # ------------------------------
 def filter_clans(clan_list, query):
     if not query:
@@ -604,11 +635,19 @@ def clan_score(clan):
     ratio = clan['donations'] / (clan['received'] + 1)
     return int(clan['donations'] * (1 + ratio))
 
+def add_war_to_history_sheets(clan_tag, war_data):
+    history = load_war_history_sheets()
+    if clan_tag not in history:
+        history[clan_tag] = []
+    war_tag = war_data.get("warTag")
+    if not any(w.get("warTag") == war_tag for w in history[clan_tag]):
+        history[clan_tag].append(war_data)
+    save_war_history_sheets(history)
+
 # ------------------------------
-# Sidebar (with About button at top)
+# Sidebar
 # ------------------------------
 with st.sidebar:
-    # --- About Section (cube button & expandable info) ---
     if st.button(t("about_btn"), use_container_width=True):
         st.session_state.show_about = not st.session_state.show_about
     if st.session_state.show_about:
@@ -672,7 +711,7 @@ with st.sidebar:
                 clean = new_tag.strip().upper()
                 if clean not in st.session_state.clan_tags:
                     st.session_state.clan_tags.append(clean)
-                    save_clan_tags(st.session_state.clan_tags)
+                    save_clan_tags_sheets(st.session_state.clan_tags)
                     st.success(t("added_success", tag=clean))
                     st.session_state.last_api_fetch = 0.0
                     st.rerun()
@@ -689,7 +728,7 @@ with st.sidebar:
             with col2:
                 if st.button(t("del_btn"), key=f"del_{i}"):
                     st.session_state.clan_tags.pop(i)
-                    save_clan_tags(st.session_state.clan_tags)
+                    save_clan_tags_sheets(st.session_state.clan_tags)
                     st.session_state.last_api_fetch = 0.0
                     st.rerun()
 
@@ -702,7 +741,7 @@ with st.sidebar:
                 imported = json.loads(uploaded_file.getvalue().decode())
                 if isinstance(imported, list) and all(isinstance(tag, str) for tag in imported):
                     st.session_state.clan_tags = imported
-                    save_clan_tags(imported)
+                    save_clan_tags_sheets(imported)
                     st.success(t("import_success"))
                     st.session_state.last_api_fetch = 0.0
                     st.rerun()
@@ -711,22 +750,17 @@ with st.sidebar:
             except:
                 st.error(t("error_reading"))
 
-        # --- پشتیبان‌گیری از daily_stats.json ---
-        st.markdown("---")
+        # Backup daily stats from Sheets (still possible)
         st.subheader(t("daily_stats_backup"))
-        if os.path.exists(DAILY_STATS_FILE):
-            with open(DAILY_STATS_FILE, "r") as f:
-                daily_json = f.read()
-            st.download_button(t("download_daily"), daily_json, file_name="daily_stats.json")
-        else:
-            st.info("No daily stats file yet.")
+        if st.button(t("download_daily")):
+            stats = load_daily_stats_sheets()
+            st.download_button("Download", json.dumps(stats), "daily_stats.json")
         uploaded_daily = st.file_uploader(t("upload_daily"), type="json", key="daily_upload")
         if uploaded_daily is not None:
             try:
-                content = uploaded_daily.getvalue().decode()
-                data = json.loads(content)
-                save_daily_stats(data)
-                st.success("Daily stats uploaded successfully!")
+                data = json.loads(uploaded_daily.getvalue().decode())
+                save_daily_stats_sheets(data)
+                st.success("Daily stats uploaded!")
                 st.rerun()
             except:
                 st.error("Invalid daily stats file.")
@@ -741,7 +775,7 @@ with col_refresh_btn:
         st.rerun()
 
 # ------------------------------
-# Main Header (larger title)
+# Main Header
 # ------------------------------
 col_head, col_dance = st.columns([8, 2])
 with col_head:
@@ -781,7 +815,6 @@ if st.session_state.selected_clan_tag:
         """, unsafe_allow_html=True)
         st.info(t("description", desc=selected_clan['description']))
 
-        # Metrics row including today's donations
         m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
         with m_col1:
             st.markdown(f'<div class="glass-metric"><p>{t("total_donated")}</p><h2>{selected_clan["donations"]:,}</h2></div>', unsafe_allow_html=True)
@@ -794,12 +827,8 @@ if st.session_state.selected_clan_tag:
         with m_col5:
             st.markdown(f'<div class="glass-metric" style="border-bottom-color: #ffaa45;"><p>{t("donated_today")}</p><h2>{selected_clan.get("donations_today", 0):,}</h2></div>', unsafe_allow_html=True)
 
-        # Tabs: Members, Regular War, War League, Capital
         tab_overview, tab_regular_war, tab_war_league, tab_capital = st.tabs([
-            t("members_tab"),
-            t("regular_war_tab"),
-            t("war_tab"),
-            t("capital_tab")
+            t("members_tab"), t("regular_war_tab"), t("war_tab"), t("capital_tab")
         ])
 
         with tab_overview:
@@ -819,7 +848,7 @@ if st.session_state.selected_clan_tag:
             for idx, m in enumerate(sorted_m, 1):
                 player_tag = m['tag']
                 player_data = next((p for p in all_players_list if p['tag'] == player_tag), None)
-                today_donations = player_data['donations_today'] if player_data and 'donations_today' in player_data else 0
+                today_donations = player_data['donations_today'] if player_data else 0
                 table_html += f"<tr><td>{idx}</td><td><a href='?player={player_tag}' style='color:white; font-weight:bold;'>{m['name']}</a></td><td>{m['role']}</td><td><span class='lvl-badge'>⭐ {m.get('expLevel',0)}</span></td><td style='color:#00ffcc'>{m.get('donations',0):,}</td><td style='color:#ffaa45; font-weight:bold;'>{today_donations:,}</td><td>{m.get('donationsReceived',0):,}</td></tr>"
             table_html += "</tbody></table></div>"
             st.markdown(table_html, unsafe_allow_html=True)
@@ -831,7 +860,6 @@ if st.session_state.selected_clan_tag:
                     st.query_params.clear()
                     st.rerun()
 
-        # ----- تب Regular War -----
         with tab_regular_war:
             st.subheader(t("regular_war_tab"))
             try:
@@ -844,7 +872,6 @@ if st.session_state.selected_clan_tag:
                     if state == "notInWar":
                         st.info(t("regular_war_not_found"))
                     else:
-                        # نمایش وار جاری یا تمام‌شده
                         clan = war_data.get("clan", {})
                         opponent = war_data.get("opponent", {})
                         col1, col2 = st.columns(2)
@@ -873,9 +900,7 @@ if st.session_state.selected_clan_tag:
                             </div>
                             """, unsafe_allow_html=True)
                         st.caption(f"State: {state} – War tag: {war_data.get('warTag','?')}")
-                        # ذخیره در تاریخچه اگر وار تمام شده باشد
                         if state == "warEnded":
-                            # ساخت دیکشنری ساده برای تاریخچه
                             history_entry = {
                                 "warTag": war_data.get("warTag"),
                                 "clanName": clan.get("name"),
@@ -887,27 +912,24 @@ if st.session_state.selected_clan_tag:
                                 "date": today_str,
                                 "result": "win" if clan.get("stars", 0) > opponent.get("stars", 0) else "loss" if clan.get("stars", 0) < opponent.get("stars", 0) else "draw"
                             }
-                            add_war_to_history(selected_clan['tag'], history_entry)
+                            add_war_to_history_sheets(selected_clan['tag'], history_entry)
                 else:
                     st.info(t("regular_war_not_found"))
-            except Exception as e:
+            except:
                 st.error(t("war_error"))
 
-            # نمایش تاریخچه وارهای قبلی
             st.subheader(t("regular_war_history"))
-            history = load_war_history()
+            history = load_war_history_sheets()
             clan_wars = history.get(selected_clan['tag'], [])
             if clan_wars:
-                # جدول ساده
                 war_table = "<div class='table-wrapper'><table class='custom-table'><thead><tr><th>Date</th><th>Opponent</th><th>Result</th><th>Stars</th><th>Destruction</th></tr></thead><tbody>"
-                for w in reversed(clan_wars[-10:]):  # آخرین ۱۰ وار
+                for w in reversed(clan_wars[-10:]):
                     war_table += f"<tr><td>{w.get('date','?')}</td><td>{w.get('opponentName','Unknown')}</td><td>{w.get('result','?')}</td><td>⭐ {w.get('clanStars',0)}</td><td>{w.get('clanDestruction',0):.1f}%</td></tr>"
                 war_table += "</tbody></table></div>"
                 st.markdown(war_table, unsafe_allow_html=True)
             else:
                 st.info("No war history yet.")
 
-        # ----- تب War League (بدون تغییر) -----
         with tab_war_league:
             try:
                 clean = selected_clan['tag'].replace("#", "%23")
@@ -971,7 +993,6 @@ if st.session_state.selected_clan_tag:
                 st.metric(t("capital_hall_level"), selected_clan.get('capital_hall_level', 0))
             with col2:
                 st.metric(t("capital_league"), selected_clan.get('capital_league', 'Unranked'))
-
             try:
                 clean = selected_clan['tag'].replace("#", "%23")
                 capital_url = f"https://cocproxy.royaleapi.dev/v1/clans/{clean}/capitalraidseasons"
