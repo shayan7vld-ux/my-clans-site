@@ -316,11 +316,10 @@ if 'lang' not in st.session_state:
 if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
-# ------------- Google Sheets helpers (FIXED) -------------
+# ------------- Google Sheets helpers with caching -------------
 @st.cache_resource
 def get_gsheet_client():
     try:
-        # مستقیماً دیکشنری را از secrets بگیر (بدون json.loads)
         creds_dict = st.secrets["gcp_service_account"]
         creds = ServiceAccountCredentials.from_json_keyfile_dict(
             creds_dict,
@@ -336,11 +335,12 @@ def get_spreadsheet():
     if client is None:
         return None
     try:
-        return client.open_by_key(SPREADSHEET_ID)   # استفاده از متغیر سراسری SPREADSHEET_ID
+        return client.open_by_key(SPREADSHEET_ID)
     except Exception as e:
         st.error(f"Cannot open spreadsheet: {e}")
         return None
 
+@st.cache_data(ttl=120)  # کش به مدت ۲ دقیقه
 def load_clan_tags_sheets():
     try:
         sh = get_spreadsheet()
@@ -354,20 +354,7 @@ def load_clan_tags_sheets():
     except:
         return []
 
-def save_clan_tags_sheets(tags):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try:
-            ws = sh.worksheet("ClanTags")
-        except:
-            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
-        ws.clear()
-        if tags:
-            ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
-    except:
-        pass
-
+@st.cache_data(ttl=120)
 def load_daily_stats_sheets():
     try:
         sh = get_spreadsheet()
@@ -382,18 +369,7 @@ def load_daily_stats_sheets():
     except:
         return {}
 
-def save_daily_stats_sheets(stats):
-    try:
-        sh = get_spreadsheet()
-        if sh is None: return
-        try:
-            ws = sh.worksheet("DailyStats")
-        except:
-            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
-        ws.update('A1', [[json.dumps(stats)]])
-    except:
-        pass
-
+@st.cache_data(ttl=120)
 def load_war_history_sheets():
     try:
         sh = get_spreadsheet()
@@ -408,6 +384,35 @@ def load_war_history_sheets():
     except:
         return {}
 
+def save_clan_tags_sheets(tags):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try:
+            ws = sh.worksheet("ClanTags")
+        except:
+            ws = sh.add_worksheet("ClanTags", rows="100", cols="1")
+        ws.clear()
+        if tags:
+            ws.update('A1:A'+str(len(tags)), [[t] for t in tags])
+        # پس از ذخیره، کش را پاک می‌کنیم
+        load_clan_tags_sheets.clear()
+    except:
+        pass
+
+def save_daily_stats_sheets(stats):
+    try:
+        sh = get_spreadsheet()
+        if sh is None: return
+        try:
+            ws = sh.worksheet("DailyStats")
+        except:
+            ws = sh.add_worksheet("DailyStats", rows="2", cols="1")
+        ws.update('A1', [[json.dumps(stats)]])
+        load_daily_stats_sheets.clear()
+    except:
+        pass
+
 def save_war_history_sheets(history):
     try:
         sh = get_spreadsheet()
@@ -417,6 +422,7 @@ def save_war_history_sheets(history):
         except:
             ws = sh.add_worksheet("WarHistory", rows="2", cols="1")
         ws.update('A1', [[json.dumps(history)]])
+        load_war_history_sheets.clear()
     except:
         pass
 
@@ -425,36 +431,44 @@ if 'clan_tags' not in st.session_state:
     st.session_state.clan_tags = load_clan_tags_sheets()
 CLAN_TAGS = st.session_state.clan_tags
 
-# ------------- Auto‑refresh -------------
+# ------------- Auto‑refresh (هر ۵ دقیقه برای کاهش بار) -------------
 components.html("""
 <script>
-setTimeout(function() { window.location.reload(); }, 120000);
+setTimeout(function() { window.location.reload(); }, 300000);
 </script>
 """, height=0)
 
 # ------------- Data Fetching -------------
 def fetch_all_data():
     current_time = time.time()
-    if current_time - st.session_state.last_api_fetch > 120 or not st.session_state.cached_clan_data:
+    # اگر تا حالا فچ نشده یا بیش از ۲ دقیقه گذشته
+    if st.session_state.last_api_fetch == 0 or (current_time - st.session_state.last_api_fetch > 120):
         new_cache = {}
         for tag in CLAN_TAGS:
             clean_tag = tag.replace("#", "%23")
             url = f"https://cocproxy.royaleapi.dev/v1/clans/{clean_tag}"
             try:
-                res = requests.get(url, headers=headers, timeout=5)
+                res = requests.get(url, headers=headers, timeout=10)
                 if res.status_code == 200:
                     new_cache[tag] = res.json()
-            except:
-                continue
+                else:
+                    st.warning(f"خطا در دریافت {tag}: {res.status_code}")
+            except Exception as e:
+                st.error(f"خطا: {e}")
         if new_cache:
             st.session_state.cached_clan_data = new_cache
             st.session_state.last_api_fetch = current_time
+        else:
+            st.error("هیچ داده‌ای از API دریافت نشد. لطفاً اتصال اینترنت و API Key را بررسی کنید.")
 
 fetch_all_data()
-seconds_ago = int(time.time() - st.session_state.last_api_fetch)
-time_string = f"{seconds_ago}s ago" if seconds_ago < 60 else f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
+seconds_ago = int(time.time() - st.session_state.last_api_fetch) if st.session_state.last_api_fetch > 0 else 0
+if seconds_ago < 60:
+    time_string = f"{seconds_ago}s ago"
+else:
+    time_string = f"{seconds_ago // 60}m {seconds_ago % 60}s ago"
 
-# ------------- CSS -------------
+# ------------- CSS (همان قبل، حذف به دلیل طولانی نشدن) -------------
 def get_theme_css():
     if st.session_state.theme == "light":
         return """
@@ -470,14 +484,7 @@ def get_theme_css():
         .glass-card { background: rgba(255,255,255,0.4) !important; border-color: rgba(0,0,0,0.1) !important; border-top-color: #ffaa45 !important; }
         .glass-metric { background: rgba(255,255,255,0.3); border-color: rgba(0,0,0,0.05); }
         .lvl-badge, .th-badge { color: #fff; }
-        .war-card {
-            background: rgba(255,255,255,0.8);
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 12px;
-            padding: 10px;
-            margin: 10px 0;
-            backdrop-filter: blur(10px);
-        }
+        .war-card { background: rgba(255,255,255,0.8); border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 10px; margin: 10px 0; backdrop-filter: blur(10px); }
         .war-card h4 { margin-top: 0; }
         .war-clan-name { font-weight: bold; }
         .war-stats { display: flex; justify-content: space-between; }
@@ -498,14 +505,7 @@ def get_theme_css():
         .glass-metric { background: rgba(255, 255, 255, 0.03); border-color: rgba(255, 255, 255, 0.08); }
         .lvl-badge { background-color: #1f6feb; }
         .th-badge { background-color: #da70d6; }
-        .war-card {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 10px;
-            margin: 10px 0;
-            backdrop-filter: blur(10px);
-        }
+        .war-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 10px; margin: 10px 0; backdrop-filter: blur(10px); }
         .war-card h4 { color: #ffaa45; margin-top: 0; }
         .war-clan-name { font-weight: bold; color: #f0f6fc; }
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
@@ -635,7 +635,7 @@ def add_war_to_history_sheets(clan_tag, war_data):
         history[clan_tag].append(war_data)
     save_war_history_sheets(history)
 
-# ------------- Sidebar -------------
+# ------------- Sidebar (بدون تغییر عمده، همان کد قبل) -------------
 with st.sidebar:
     if st.button(t("about_btn"), use_container_width=True):
         st.session_state.show_about = not st.session_state.show_about
@@ -842,6 +842,8 @@ if st.session_state.selected_clan_tag:
                     st.query_params.clear()
                     st.rerun()
 
+        # ---------- regular war, war league, capital (همان کد قبلی) ----------
+        # (به دلیل طولانی نشدن، همان کد قبلی را قرار دهید. من فقط خلاصه می‌نویسم ولی شما از کد قبلی کامل کپی کنید)
         with tab_regular_war:
             st.subheader(t("regular_war_tab"))
             try:
@@ -1003,10 +1005,11 @@ else:
             csv_download_button(filtered_clans, "clans.csv",
                                 columns=["rank","name","tag","leader","members","donations","donations_today","received","score"],
                                 headers=[t("rank"), t("clan_name_column"), t("clan_tag_column"), t("leader"), t("members"), t("donated"), t("donated_today"), t("received"), t("score")])
+            # نمایش جدول با چیدمان صحیح
             for rank, clan in enumerate(filtered_clans, 1):
-                col_r, col_img, col_name, col_ldr, col_mem, col_don, col_today, col_rec, col_score = st.columns([1,1,4,2,2,2,2,2,2])
+                col_r, col_img, col_name, col_ldr, col_mem, col_don, col_today, col_rec, col_score = st.columns([0.5,1,3,1.5,1.5,1.5,1.5,1.5,1.5])
                 with col_r: st.write(f"**{rank}**")
-                with col_img: st.image(clan['badge'], width=38)
+                with col_img: st.image(clan['badge'], width=40)
                 with col_name:
                     if st.button(f"🛡️ {clan['name']}", key=f"cl_{clan['tag']}", use_container_width=True):
                         st.session_state.selected_clan_tag = clan['tag']
