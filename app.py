@@ -21,7 +21,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 # ------------------------------
 st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="expanded")
 
-# ---------- کلید API را فقط از Secrets بگیر ----------
+# ---------- کلید API فقط از Secrets ----------
 try:
     API_KEY = st.secrets["COC_API_KEY"]
 except KeyError:
@@ -319,7 +319,7 @@ if 'show_about' not in st.session_state:
     st.session_state.show_about = False
 
 # ------------------------------
-# Google Sheets helpers (corrected authentication)
+# Google Sheets helpers
 # ------------------------------
 @st.cache_resource
 def get_gsheet_client():
@@ -339,7 +339,8 @@ def get_spreadsheet():
     if client is None:
         return None
     try:
-        sheet_id = st.secrets["SPREADSHEET_ID"]
+        # 👇 شناسهٔ مستقیم جایگزین شده
+        sheet_id = "1_OOYWwm9HQvgv4Q4fIiE4CtEGKHHUjGPxLH6Qb5tnTE"
         return client.open_by_key(sheet_id)
     except Exception as e:
         st.error(f"Cannot open spreadsheet: {e}")
