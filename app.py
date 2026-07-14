@@ -213,12 +213,6 @@ if 'last_visit' not in st.session_state:
     st.session_state.last_visit = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
-if 'show_admin_login' not in st.session_state:
-    st.session_state.show_admin_login = False
-if 'about_click_count' not in st.session_state:
-    st.session_state.about_click_count = 0
-if 'last_about_click' not in st.session_state:
-    st.session_state.last_about_click = 0
 if 'theme' not in st.session_state:
     st.session_state.theme = "dark"
 if 'max_donations_seen' not in st.session_state:
@@ -245,11 +239,6 @@ if 'show_archive' not in st.session_state:
 ITEMS_PER_PAGE = 50
 SHEETS_READ_INTERVAL = 600
 SHEETS_WRITE_INTERVAL = 300
-
-# ---------- باز شدن پنل ادمین با لینک مستقیم ----------
-if st.query_params.get("admin") == "1":
-    st.session_state.show_admin_login = True
-    st.query_params.clear()
 
 @st.cache_resource
 def get_gsheet_client():
@@ -808,16 +797,8 @@ def show_pagination(total_pages, page, total, page_key):
 
 # ---------- Sidebar ----------
 with st.sidebar:
+    # دکمه About (حفظ شده برای نمایش اطلاعات)
     if st.button(t("about_btn"), use_container_width=True):
-        now = time.time()
-        if now - st.session_state.last_about_click < 5:
-            st.session_state.about_click_count += 1
-        else:
-            st.session_state.about_click_count = 1
-        st.session_state.last_about_click = now
-        if st.session_state.about_click_count >= 3:
-            st.session_state.show_admin_login = True
-            st.session_state.about_click_count = 0
         st.session_state.show_about = not st.session_state.show_about
         st.rerun()
 
@@ -856,13 +837,13 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
+    # پنل ادمین (همیشه در دسترس، بدون مخفی‌سازی)
     if st.session_state.admin_authenticated:
         st.markdown("---")
         st.header(t("admin_panel"))
         st.success(t("logged_in"))
         if st.button(t("logout")):
             st.session_state.admin_authenticated = False
-            st.session_state.show_admin_login = False
             st.rerun()
 
         if st.button(t("last_visit_btn")):
@@ -943,8 +924,8 @@ with st.sidebar:
                 st.rerun()
             except:
                 st.error("Invalid daily stats file.")
-
-    elif st.session_state.show_admin_login:
+    else:
+        # فرم ورود همیشه نمایش داده می‌شود
         st.markdown("---")
         st.header(t("admin_panel"))
         username = st.text_input(t("username"))
@@ -954,14 +935,12 @@ with st.sidebar:
             if st.button(t("login")):
                 if username == "amirdelavari" and password == "Amirgameover1382":
                     st.session_state.admin_authenticated = True
-                    st.session_state.show_admin_login = False
                     st.success(t("logged_in"))
                     st.rerun()
                 else:
                     st.error("Invalid username or password")
         with col2:
             if st.button("Cancel"):
-                st.session_state.show_admin_login = False
                 st.rerun()
 
 # ---------- Force Refresh + Archive ----------
