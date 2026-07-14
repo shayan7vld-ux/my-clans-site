@@ -99,8 +99,6 @@ TRANSLATIONS = {
         "archive_title": "Monthly Archive",
         "select_month": "Select Month",
         "no_archive": "No archived data for this month.",
-        "admin_login_btn": "🔐 Admin Login",
-        "admin_cancel_btn": "Cancel",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -167,8 +165,6 @@ TRANSLATIONS = {
         "archive_title": "آرشیو ماهانه",
         "select_month": "انتخاب ماه",
         "no_archive": "داده‌ای برای این ماه آرشیو نشده است.",
-        "admin_login_btn": "🔐 ورود مدیر",
-        "admin_cancel_btn": "انصراف",
     }
 }
 
@@ -210,7 +206,7 @@ if 'selected_clan_tag' not in st.session_state:
 if 'selected_player_tag' not in st.session_state:
     st.session_state.selected_player_tag = None
 if 'last_api_fetch' not in st.session_state:
-    st.session_state.last_api_fetch = 0.0
+    st.session_state.last_api_fetch = time.time()
 if 'cached_clan_data' not in st.session_state:
     st.session_state.cached_clan_data = {}
 if 'last_visit' not in st.session_state:
@@ -219,7 +215,7 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'show_admin_login' not in st.session_state:
     st.session_state.show_admin_login = False
-if 'about_click_count' not in st.session_state:   # kept but not used
+if 'about_click_count' not in st.session_state:
     st.session_state.about_click_count = 0
 if 'last_about_click' not in st.session_state:
     st.session_state.last_about_click = 0
@@ -520,7 +516,7 @@ setInterval(function() {
 
 def fetch_all_data():
     current_time = time.time()
-    if current_time - st.session_state.last_api_fetch > 120:
+    if current_time - st.session_state.last_api_fetch > 120 or not st.session_state.cached_clan_data:
         new_cache = {}
         for tag in CLAN_TAGS:
             clean_tag = tag.replace("#", "%23")
@@ -533,7 +529,7 @@ def fetch_all_data():
                 continue
         if new_cache:
             st.session_state.cached_clan_data = new_cache
-        st.session_state.last_api_fetch = current_time
+            st.session_state.last_api_fetch = current_time
 
 fetch_all_data()
 seconds_ago = int(time.time() - st.session_state.last_api_fetch)
@@ -805,8 +801,16 @@ def show_pagination(total_pages, page, total, page_key):
 
 # ---------- Sidebar ----------
 with st.sidebar:
-    # --- درباره ما ---
     if st.button(t("about_btn"), use_container_width=True):
+        now = time.time()
+        if now - st.session_state.last_about_click < 5:
+            st.session_state.about_click_count += 1
+        else:
+            st.session_state.about_click_count = 1
+        st.session_state.last_about_click = now
+        if st.session_state.about_click_count >= 3:
+            st.session_state.show_admin_login = True
+            st.session_state.about_click_count = 0
         st.session_state.show_about = not st.session_state.show_about
         st.rerun()
 
@@ -845,12 +849,7 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
-    # --- بخش ورود مدیر (ساده) ---
-    if not st.session_state.admin_authenticated:
-        if st.button(t("admin_login_btn")):
-            st.session_state.show_admin_login = True
-            st.rerun()
-    else:
+    if st.session_state.admin_authenticated:
         st.markdown("---")
         st.header(t("admin_panel"))
         st.success(t("logged_in"))
@@ -938,8 +937,7 @@ with st.sidebar:
             except:
                 st.error("Invalid daily stats file.")
 
-    # --- فرم ورود (وقتی دکمه لاگین زده شده) ---
-    if st.session_state.show_admin_login and not st.session_state.admin_authenticated:
+    elif st.session_state.show_admin_login:
         st.markdown("---")
         st.header(t("admin_panel"))
         username = st.text_input(t("username"))
@@ -955,7 +953,7 @@ with st.sidebar:
                 else:
                     st.error("Invalid username or password")
         with col2:
-            if st.button(t("admin_cancel_btn")):
+            if st.button("Cancel"):
                 st.session_state.show_admin_login = False
                 st.rerun()
 
@@ -1265,7 +1263,9 @@ else:
                     with col_badge:
                         st.image(clan['badge'], width=45)
                     with col_info:
+                        # Clan name as plain text (no link)
                         st.markdown(f'<span class="clan-name-text">{clan["name"]}</span>', unsafe_allow_html=True)
+                        # Open button
                         if st.button("🛡️ Open", key=f"open_{clan['tag']}"):
                             st.session_state.selected_clan_tag = clan['tag']
                             st.rerun()
