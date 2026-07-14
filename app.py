@@ -15,7 +15,7 @@ TRANSLATOR_AVAILABLE = True
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="TopReqClans Global", layout="wide", initial_sidebar_state="collapsed")
 
 try:
     API_KEY = st.secrets["COC_API_KEY"]
@@ -46,7 +46,7 @@ TRANSLATIONS = {
         "logged_in": "You are logged in as admin.",
         "last_visit_btn": "📂 Last Visit",
         "last_visit_info": "Last visit: {time}",
-        "auto_refresh_caption": "Page auto-refreshes every 5 minutes.",
+        "auto_refresh_caption": "Page auto-refreshes every 2 minutes.",
         "add_clan": "➕ Add Clan", "tag_input": "Clan tag (#XXXXXX)",
         "add_btn": "Add", "tag_exists": "This tag already exists.",
         "invalid_tag": "Enter a valid tag starting with #",
@@ -95,6 +95,12 @@ TRANSLATIONS = {
         "full_restore_success": "Full backup restored successfully!",
         "full_restore_invalid": "Invalid backup file.",
         "prev_page": "⬅️ Previous", "next_page": "Next ➡️", "page": "Page",
+        "archive_btn": "📅 Archive",
+        "archive_title": "Monthly Archive",
+        "select_month": "Select Month",
+        "no_archive": "No archived data for this month.",
+        "admin_login_btn": "🔐 Admin Login",
+        "admin_cancel_btn": "Cancel",
     },
     "fa": {
         "title": "🏆 برترین کلن‌های درخواستی",
@@ -108,7 +114,7 @@ TRANSLATIONS = {
         "logged_in": "شما به‌عنوان مدیر وارد شده‌اید.",
         "last_visit_btn": "📂 آخرین بازدید",
         "last_visit_info": "آخرین بازدید: {time}",
-        "auto_refresh_caption": "صفحه هر ۵ دقیقه به‌طور خودکار ریلود می‌شود.",
+        "auto_refresh_caption": "صفحه هر ۲ دقیقه به‌طور خودکار ریلود می‌شود.",
         "add_clan": "➕ افزودن کلن", "tag_input": "تگ کلن (#XXXXXX)",
         "add_btn": "افزودن", "tag_exists": "این تگ از قبل وجود دارد.",
         "invalid_tag": "تگ معتبر وارد کنید (با # شروع شود).",
@@ -157,6 +163,12 @@ TRANSLATIONS = {
         "full_restore_success": "پشتیبان کامل با موفقیت بازیابی شد!",
         "full_restore_invalid": "فایل پشتیبان نامعتبر است.",
         "prev_page": "⬅️ قبلی", "next_page": "بعدی ➡️", "page": "صفحه",
+        "archive_btn": "📅 آرشیو",
+        "archive_title": "آرشیو ماهانه",
+        "select_month": "انتخاب ماه",
+        "no_archive": "داده‌ای برای این ماه آرشیو نشده است.",
+        "admin_login_btn": "🔐 ورود مدیر",
+        "admin_cancel_btn": "انصراف",
     }
 }
 
@@ -198,7 +210,7 @@ if 'selected_clan_tag' not in st.session_state:
 if 'selected_player_tag' not in st.session_state:
     st.session_state.selected_player_tag = None
 if 'last_api_fetch' not in st.session_state:
-    st.session_state.last_api_fetch = time.time()
+    st.session_state.last_api_fetch = 0.0
 if 'cached_clan_data' not in st.session_state:
     st.session_state.cached_clan_data = {}
 if 'last_visit' not in st.session_state:
@@ -207,7 +219,7 @@ if 'admin_authenticated' not in st.session_state:
     st.session_state.admin_authenticated = False
 if 'show_admin_login' not in st.session_state:
     st.session_state.show_admin_login = False
-if 'about_click_count' not in st.session_state:
+if 'about_click_count' not in st.session_state:   # kept but not used
     st.session_state.about_click_count = 0
 if 'last_about_click' not in st.session_state:
     st.session_state.last_about_click = 0
@@ -231,6 +243,8 @@ if 'player_page' not in st.session_state:
     st.session_state.player_page = 1
 if 'legend_page' not in st.session_state:
     st.session_state.legend_page = 1
+if 'show_archive' not in st.session_state:
+    st.session_state.show_archive = False
 
 ITEMS_PER_PAGE = 50
 SHEETS_READ_INTERVAL = 600
@@ -268,29 +282,49 @@ def get_or_create_worksheet(sh, name, rows=500, cols=1):
         except:
             return None
 
-def save_json_safe(ws, data):
+def save_json_in_rows(ws, data, max_chars_per_cell=45000):
     try:
         json_str = json.dumps(data, ensure_ascii=False)
-        chunks = [json_str[i:i+45000] for i in range(0, len(json_str), 45000)]
+        chunks = [json_str[i:i+max_chars_per_cell] for i in range(0, len(json_str), max_chars_per_cell)]
         ws.clear()
         if chunks:
             ws.update('A1:A'+str(len(chunks)), [[chunk] for chunk in chunks], value_input_option='RAW')
     except:
         pass
 
-def load_json_safe(ws):
+def load_json_from_rows(ws):
     try:
         values = ws.col_values(1)
         if values and values[0]:
-            return json.loads(''.join(values))
+            combined = ''.join(values)
+            return json.loads(combined)
         return {}
     except:
         return {}
 
+def load_monthly_archive():
+    sh = get_spreadsheet()
+    if sh is None: return {}
+    try:
+        ws = get_or_create_worksheet(sh, "MonthlyArchive", rows=500)
+        return load_json_from_rows(ws) if ws else {}
+    except:
+        return {}
+
+def save_monthly_archive(data):
+    sh = get_spreadsheet()
+    if sh is None: return
+    try:
+        ws = get_or_create_worksheet(sh, "MonthlyArchive", rows=500)
+        if ws:
+            save_json_in_rows(ws, data)
+    except:
+        pass
+
 def refresh_app_data():
     sh = get_spreadsheet()
     if sh is None:
-        return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+        return {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}, 'donation_baselines': {}}
 
     data = {}
     try:
@@ -303,23 +337,23 @@ def refresh_app_data():
     except:
         data['clan_tags'] = []
 
-    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history")]:
+    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history"), ("DonationBaselines", "donation_baselines")]:
         try:
             ws = get_or_create_worksheet(sh, name, rows=2000)
-            data[key] = load_json_safe(ws) if ws else {}
+            data[key] = load_json_from_rows(ws) if ws else {}
         except:
             data[key] = {}
 
     return data
 
-def save_app_data(data):
-    if st.session_state.app_data is not None and data == st.session_state.app_data:
-        return
-
-    now = time.time()
-    if now - st.session_state.last_sheets_write < SHEETS_WRITE_INTERVAL:
-        st.session_state.app_data = data
-        return
+def save_app_data(data, force=False):
+    if not force:
+        if st.session_state.app_data is not None and data == st.session_state.app_data:
+            return
+        now = time.time()
+        if now - st.session_state.last_sheets_write < SHEETS_WRITE_INTERVAL:
+            st.session_state.app_data = data
+            return
 
     sh = get_spreadsheet()
     if sh is None: return
@@ -333,17 +367,17 @@ def save_app_data(data):
     except:
         pass
 
-    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history")]:
+    for name, key in [("DailyStats", "daily_stats"), ("MemberSnapshots", "member_snaps"), ("WarHistory", "war_history"), ("DonationBaselines", "donation_baselines")]:
         try:
             ws = get_or_create_worksheet(sh, name, rows=2000)
             if ws:
-                save_json_safe(ws, data.get(key, {}))
+                save_json_in_rows(ws, data.get(key, {}))
         except:
             pass
 
     st.session_state.app_data = data
-    st.session_state.last_sheets_write = now
-    st.session_state.last_sheets_refresh = now
+    st.session_state.last_sheets_write = time.time()
+    st.session_state.last_sheets_refresh = time.time()
 
 def get_app_data():
     now = time.time()
@@ -353,7 +387,7 @@ def get_app_data():
             st.session_state.app_data = refresh_app_data()
         except:
             if st.session_state.app_data is None:
-                st.session_state.app_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}}
+                st.session_state.app_data = {'clan_tags': [], 'daily_stats': {}, 'member_snaps': {}, 'war_history': {}, 'donation_baselines': {}}
         st.session_state.last_sheets_refresh = now
     return st.session_state.app_data
 
@@ -369,15 +403,18 @@ def load_member_snapshot_sheets():
 def load_war_history_sheets():
     return get_app_data().get('war_history', {})
 
+def load_donation_baselines():
+    return get_app_data().get('donation_baselines', {})
+
 def save_clan_tags_sheets(tags):
     data = get_app_data()
     data['clan_tags'] = tags
-    save_app_data(data)
+    save_app_data(data, force=True)
 
 def save_daily_stats_sheets(stats):
     data = get_app_data()
     data['daily_stats'] = stats
-    save_app_data(data)
+    save_app_data(data, force=True)
 
 def save_member_snapshot_sheets(snaps):
     data = get_app_data()
@@ -389,22 +426,101 @@ def save_war_history_sheets(history):
     data['war_history'] = history
     save_app_data(data)
 
+def save_donation_baselines(baselines):
+    data = get_app_data()
+    data['donation_baselines'] = baselines
+    save_app_data(data, force=True)
+
 if 'clan_tags' not in st.session_state:
     st.session_state.clan_tags = load_clan_tags_sheets()
 
 CLAN_TAGS = st.session_state.clan_tags
 
+# ---------- Cube ----------
+st.markdown("""
+<style>
+.cube-container {
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 9999;
+    width: 40px;
+    height: 40px;
+    perspective: 80px;
+    cursor: pointer;
+}
+.cube {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    animation: rotateCube 4s infinite linear;
+}
+.cube-face {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #ffaa45, #ff7b00);
+    border: 1px solid #fff;
+    opacity: 0.9;
+}
+.front  { transform: rotateY(0deg) translateZ(20px); }
+.back   { transform: rotateY(180deg) translateZ(20px); }
+.right  { transform: rotateY(90deg) translateZ(20px); }
+.left   { transform: rotateY(-90deg) translateZ(20px); }
+.top    { transform: rotateX(90deg) translateZ(20px); }
+.bottom { transform: rotateX(-90deg) translateZ(20px); }
+@keyframes rotateCube {
+    from { transform: rotateX(0deg) rotateY(0deg); }
+    to   { transform: rotateX(360deg) rotateY(360deg); }
+}
+</style>
+<div class="cube-container" onclick="
+    var sidebar = window.parent.document.querySelector('[data-testid=stSidebar]');
+    if (sidebar) sidebar.style.display = 'block';
+    var btn = window.parent.document.querySelector('button[data-testid=baseButton-header]');
+    if (btn) btn.click();
+">
+    <div class="cube">
+        <div class="cube-face front"></div>
+        <div class="cube-face back"></div>
+        <div class="cube-face right"></div>
+        <div class="cube-face left"></div>
+        <div class="cube-face top"></div>
+        <div class="cube-face bottom"></div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+# Hidden auto-refresh
+st.markdown("""
+<style>
+button:has(span:contains("hiddenRefresh")) {
+    display: none !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+if st.button("hiddenRefresh", key="hidden_refresh_btn"):
+    pass
+
 components.html("""
 <script>
-setTimeout(function() {
-    window.location.reload();
-}, 300000);
+setInterval(function() {
+    const buttons = window.parent.document.querySelectorAll('button');
+    for (let btn of buttons) {
+        if (btn.innerText.includes('hiddenRefresh')) {
+            btn.click();
+            break;
+        }
+    }
+}, 120000);
 </script>
 """, height=0)
 
 def fetch_all_data():
     current_time = time.time()
-    if current_time - st.session_state.last_api_fetch > 120 or not st.session_state.cached_clan_data:
+    if current_time - st.session_state.last_api_fetch > 120:
         new_cache = {}
         for tag in CLAN_TAGS:
             clean_tag = tag.replace("#", "%23")
@@ -417,7 +533,7 @@ def fetch_all_data():
                 continue
         if new_cache:
             st.session_state.cached_clan_data = new_cache
-            st.session_state.last_api_fetch = current_time
+        st.session_state.last_api_fetch = current_time
 
 fetch_all_data()
 seconds_ago = int(time.time() - st.session_state.last_api_fetch)
@@ -445,6 +561,12 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; }
         .stat-label { font-size: 10px; color: #6c757d; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
+        .clan-name-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+            text-shadow: 0 0 10px rgba(255,170,69,0.8), 0 0 20px rgba(255,170,69,0.5);
+        }
         </style>
         """
     else:
@@ -468,6 +590,12 @@ def get_theme_css():
         .war-stats { display: flex; justify-content: space-between; color: #c9d1d9; }
         .stat-label { font-size: 10px; color: #8b949e; display: block; }
         .stat-value { font-size: 16px; font-weight: bold; }
+        .clan-name-text {
+            font-size: 18px;
+            font-weight: bold;
+            color: #000;
+            text-shadow: 0 0 10px rgba(255,170,69,0.8), 0 0 20px rgba(255,170,69,0.5);
+        }
         </style>
         """
 
@@ -498,6 +626,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ---- Parse & daily stats ----
 all_clans_list = []
 all_players_list = []
 
@@ -514,6 +643,8 @@ for tag, data in st.session_state.cached_clan_data.items():
         "war_wins": data.get('warWins', 0), "war_ties": data.get('warTies', 0), "war_losses": data.get('warLosses', 0),
         "capital_hall_level": data.get('clanCapital', {}).get('capitalHallLevel', 0),
         "capital_league": data.get('capitalLeague', {}).get('name', 'Unranked'),
+        "war_league": data.get('league', {}).get('name', 'Unranked'),
+        "war_league_icon": data.get('league', {}).get('iconUrls', {}).get('small', ''),
     })
     for m in data.get('memberList', []):
         all_players_list.append({
@@ -521,33 +652,45 @@ for tag, data in st.session_state.cached_clan_data.items():
             "level": m.get('expLevel', 0), "donations": m.get('donations', 0), "received": m.get('donationsReceived', 0),
             "role": m['role'].capitalize(), "tag": m['tag'], "trophies": m.get('trophies', 0),
             "versus_trophies": m.get('versusTrophies', 0), "town_hall": m.get('townHallLevel', 0),
+            "donations_today": 0,
         })
 
-daily_stats = load_daily_stats_sheets()
-today_str = datetime.date.today().isoformat()
-yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+baselines = load_donation_baselines()
+now = datetime.datetime.now()
+today_830 = datetime.datetime.combine(datetime.date.today(), datetime.time(8, 30))
+if now < today_830:
+    day_start = today_830 - datetime.timedelta(days=1)
+else:
+    day_start = today_830
+day_key = day_start.strftime("%Y-%m-%d %H:%M")
+if day_key not in baselines:
+    baselines[day_key] = {}
+    for clan in all_clans_list:
+        baselines[day_key][clan['tag']] = clan['donations']
+    cutoff = day_start - datetime.timedelta(days=7)
+    baselines = {k: v for k, v in baselines.items() if k >= cutoff.strftime("%Y-%m-%d %H:%M")}
+    save_donation_baselines(baselines)
 
-yesterday_data = daily_stats.get(yesterday_str, {})
-yesterday_clans = yesterday_data.get("clans", {})
-yesterday_players = yesterday_data.get("players", {})
-
-today_snapshot = {"clans": {}, "players": {}}
-
+current_baselines = baselines.get(day_key, {})
 for clan in all_clans_list:
-    tag = clan['tag']
-    today_snapshot["clans"][tag] = clan['donations']
-    yesterday_total = yesterday_clans.get(tag)
-    clan['donations_today'] = max(0, clan['donations'] - yesterday_total) if yesterday_total is not None else 0
+    baseline = current_baselines.get(clan['tag'])
+    if baseline is None:
+        baseline = clan['donations']
+        current_baselines[clan['tag']] = baseline
+        save_donation_baselines(baselines)
+    clan['donations_today'] = max(0, clan['donations'] - baseline)
 
+daily_stats = load_daily_stats_sheets()
+yesterday_str = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+yesterday_players = daily_stats.get(yesterday_str, {}).get("players", {})
 for player in all_players_list:
-    tag = player['tag']
-    today_snapshot["players"][tag] = player['donations']
-    yesterday_total = yesterday_players.get(tag)
-    player['donations_today'] = max(0, player['donations'] - yesterday_total) if yesterday_total is not None else 0
+    yesterday_total = yesterday_players.get(player['tag'], 0)
+    player['donations_today'] = max(0, player['donations'] - yesterday_total)
 
 member_snaps = load_member_snapshot_sheets()
 new_snaps = {}
 season_lost = daily_stats.get("season_lost", {})
+monthly_archive = load_monthly_archive()
 
 for clan in all_clans_list:
     tag = clan['tag']
@@ -555,17 +698,35 @@ for clan in all_clans_list:
     last_members = member_snaps.get(tag, {})
     left_players = set(last_members.keys()) - set(current_members.keys())
     new_lost = sum(last_members[p] for p in left_players)
-    yesterday_don = yesterday_clans.get(tag)
-    if yesterday_don is not None and yesterday_don > 0 and clan['donations'] < yesterday_don * 0.5:
+    baseline = current_baselines.get(tag, clan['donations'])
+    if baseline > 0 and clan['donations'] < baseline * 0.1:
+        month_key = day_start.strftime("%Y-%m")
+        if month_key not in monthly_archive:
+            monthly_archive[month_key] = []
+        monthly_archive[month_key].append({
+            "name": clan['name'],
+            "tag": clan['tag'],
+            "level": clan['level'],
+            "donations": baseline,
+            "received": clan['received'],
+            "members": clan['members'],
+            "leader": clan['leader']
+        })
         season_lost[tag] = 0
     else:
         season_lost[tag] = season_lost.get(tag, 0) + new_lost
+
     clan['lost_season'] = season_lost[tag]
     new_snaps[tag] = current_members
 
+save_monthly_archive(monthly_archive)
 save_member_snapshot_sheets(new_snaps)
 daily_stats["season_lost"] = season_lost
-daily_stats[today_str] = today_snapshot
+today_snapshot = {
+    "clans": {c['tag']: {"donations": c['donations'], "received": c['received']} for c in all_clans_list},
+    "players": {p['tag']: p['donations'] for p in all_players_list}
+}
+daily_stats[datetime.date.today().isoformat()] = today_snapshot
 save_daily_stats_sheets(daily_stats)
 
 if all_clans_list:
@@ -642,17 +803,10 @@ def show_pagination(total_pages, page, total, page_key):
                 st.session_state[page_key] = min(total_pages, page + 1)
                 st.rerun()
 
+# ---------- Sidebar ----------
 with st.sidebar:
+    # --- درباره ما ---
     if st.button(t("about_btn"), use_container_width=True):
-        now = time.time()
-        if now - st.session_state.last_about_click < 5:
-            st.session_state.about_click_count += 1
-        else:
-            st.session_state.about_click_count = 1
-        st.session_state.last_about_click = now
-        if st.session_state.about_click_count >= 3:
-            st.session_state.show_admin_login = True
-            st.session_state.about_click_count = 0
         st.session_state.show_about = not st.session_state.show_about
         st.rerun()
 
@@ -691,7 +845,12 @@ with st.sidebar:
     st.header(t("search"))
     search_query = st.text_input(t("search_placeholder"))
 
-    if st.session_state.admin_authenticated:
+    # --- بخش ورود مدیر (ساده) ---
+    if not st.session_state.admin_authenticated:
+        if st.button(t("admin_login_btn")):
+            st.session_state.show_admin_login = True
+            st.rerun()
+    else:
         st.markdown("---")
         st.header(t("admin_panel"))
         st.success(t("logged_in"))
@@ -758,7 +917,7 @@ with st.sidebar:
         if uploaded_full is not None:
             try:
                 data = json.loads(uploaded_full.getvalue().decode())
-                save_app_data(data)
+                save_app_data(data, force=True)
                 st.session_state.clan_tags = data.get('clan_tags', [])
                 st.success(t("full_restore_success"))
                 st.rerun()
@@ -779,7 +938,8 @@ with st.sidebar:
             except:
                 st.error("Invalid daily stats file.")
 
-    elif st.session_state.show_admin_login:
+    # --- فرم ورود (وقتی دکمه لاگین زده شده) ---
+    if st.session_state.show_admin_login and not st.session_state.admin_authenticated:
         st.markdown("---")
         st.header(t("admin_panel"))
         username = st.text_input(t("username"))
@@ -795,22 +955,67 @@ with st.sidebar:
                 else:
                     st.error("Invalid username or password")
         with col2:
-            if st.button("Cancel"):
+            if st.button(t("admin_cancel_btn")):
                 st.session_state.show_admin_login = False
                 st.rerun()
 
-col_refresh_btn, _ = st.columns([2, 8])
-with col_refresh_btn:
+# ---------- Force Refresh + Archive ----------
+col_refresh, col_archive, _ = st.columns([2, 2, 6])
+with col_refresh:
     if st.button(t("force_refresh"), use_container_width=True):
         st.session_state.last_api_fetch = 0.0
         st.rerun()
+with col_archive:
+    if st.button(t("archive_btn"), use_container_width=True):
+        st.session_state.show_archive = True
 
+# ---------- Main Header ----------
 col_head, col_dance = st.columns([8, 2])
 with col_head:
     st.markdown(f'<div class="header-container"><div class="header-title" style="font-size:42px;">{t("title")}</div><div class="update-box">{t("last_update", time=time_string)}</div></div>', unsafe_allow_html=True)
 with col_dance:
     st.markdown('<div class="dancer">🕺🤖</div>', unsafe_allow_html=True)
 
+st.markdown(
+    '<div style="display: flex; justify-content: center; margin: 10px 0;">'
+    '<a href="https://link.clashofclans.com/?action=OpenGlobalChat&chatId=Paa8aa7e0a64a43658cef0bd6c58f2704" target="_blank" '
+    'style="text-decoration: none; background: linear-gradient(135deg, #ffaa45, #ff7b00); color: white; padding: 10px 25px; border-radius: 12px; font-weight: bold; font-size: 18px; box-shadow: 0 4px 10px rgba(255,170,69,0.4);">'
+    '💬 Global Chat</a></div>',
+    unsafe_allow_html=True
+)
+
+@st.dialog(t("archive_title"))
+def show_archive_dialog():
+    archive = load_monthly_archive()
+    months = sorted(archive.keys(), reverse=True)
+    if not months:
+        st.info(t("no_archive"))
+        return
+    selected_month = st.selectbox(t("select_month"), months)
+    if selected_month:
+        entries = archive[selected_month]
+        if entries:
+            st.write(f"**{len(entries)} clans**")
+            df = []
+            for e in entries:
+                df.append({
+                    "Name": e['name'],
+                    "Tag": e['tag'],
+                    "Level": e['level'],
+                    "Donations": f"{e['donations']:,}",
+                    "Received": f"{e['received']:,}",
+                    "Members": e['members'],
+                    "Leader": e['leader']
+                })
+            st.table(df)
+        else:
+            st.info(t("no_archive"))
+
+if st.session_state.show_archive:
+    show_archive_dialog()
+    st.session_state.show_archive = False
+
+# ---------- Routing ----------
 if st.session_state.selected_clan_tag:
     selected_clan = next((c for c in all_clans_list if c['tag'] == st.session_state.selected_clan_tag), None)
     if selected_clan:
@@ -820,6 +1025,10 @@ if st.session_state.selected_clan_tag:
                 st.session_state.selected_clan_tag = None
                 st.session_state.selected_player_tag = None
                 st.rerun()
+
+        league_icon_html = ""
+        if selected_clan['war_league_icon']:
+            league_icon_html = f'<img src="{selected_clan["war_league_icon"]}" width="24" style="vertical-align:middle; margin-left:8px;" title="{selected_clan["war_league"]}">'
 
         st.markdown(f"""
         <div class="glass-card">
@@ -832,7 +1041,7 @@ if st.session_state.selected_clan_tag:
                     </div>
                 </div>
                 <div>
-                    <span style="color:#00ffcc; font-weight:bold;">Level {selected_clan['level']}</span><br>
+                    <span style="color:#00ffcc; font-weight:bold;">Level {selected_clan['level']} {league_icon_html}</span><br>
                     <span style="color:gray;">{selected_clan['location']}</span>
                 </div>
             </div>
@@ -873,7 +1082,7 @@ if st.session_state.selected_clan_tag:
             for idx, m in enumerate(sorted_m, 1):
                 player_tag = m['tag']
                 player_data = next((p for p in all_players_list if p['tag'] == player_tag), None)
-                today_donations = player_data['donations_today'] if player_data else 0
+                today_donations = player_data.get('donations_today', 0) if player_data else 0
                 table_html += f"<tr><td>{idx}</td><td><a href='?player={player_tag}' style='color:white; font-weight:bold;'>{m['name']}</a></td><td>{m['role']}</td><td><span class='lvl-badge'>⭐ {m.get('expLevel',0)}</span></td><td style='color:#00ffcc'>{m.get('donations',0):,}</td><td style='color:#ffaa45; font-weight:bold;'>{today_donations:,}</td><td>{m.get('donationsReceived',0):,}</td></tr>"
             table_html += "</tbody></table></div>"
             st.markdown(table_html, unsafe_allow_html=True)
@@ -934,7 +1143,7 @@ if st.session_state.selected_clan_tag:
                                 "opponentName": opponent.get("name"),
                                 "opponentStars": opponent.get("stars", 0),
                                 "opponentDestruction": opponent.get("destructionPercentage", 0),
-                                "date": today_str,
+                                "date": datetime.date.today().isoformat(),
                                 "result": "win" if clan.get("stars", 0) > opponent.get("stars", 0) else "loss" if clan.get("stars", 0) < opponent.get("stars", 0) else "draw"
                             }
                             add_war_to_history_sheets(selected_clan['tag'], history_entry)
@@ -1050,13 +1259,16 @@ else:
             for rank, clan in enumerate(page_items, (page - 1) * ITEMS_PER_PAGE + 1):
                 with st.container():
                     st.markdown('<div class="clan-card">', unsafe_allow_html=True)
-                    col_rank, col_badge, col_info, col_stats, col_btn = st.columns([0.5, 1, 3, 5, 1.5])
+                    col_rank, col_badge, col_info, col_stats = st.columns([0.5, 1, 3, 6])
                     with col_rank:
                         st.markdown(f"**{rank}**")
                     with col_badge:
                         st.image(clan['badge'], width=45)
                     with col_info:
-                        st.markdown(f"<div style='font-size:18px; font-weight:bold;'>{clan['name']}</div>", unsafe_allow_html=True)
+                        st.markdown(f'<span class="clan-name-text">{clan["name"]}</span>', unsafe_allow_html=True)
+                        if st.button("🛡️ Open", key=f"open_{clan['tag']}"):
+                            st.session_state.selected_clan_tag = clan['tag']
+                            st.rerun()
                         st.caption(f"{clan['tag']} • 👑 {clan['leader']} • 👥 {clan['members']}/50")
                     with col_stats:
                         s_cols = st.columns(4)
@@ -1072,10 +1284,6 @@ else:
                         with s_cols[3]:
                             st.markdown(f"<span class='stat-label'>{t('lost')}</span>", unsafe_allow_html=True)
                             st.markdown(f"<span class='stat-value' style='color:#ff4444;'>{clan.get('lost_season', 0):,}</span>", unsafe_allow_html=True)
-                    with col_btn:
-                        if st.button("🛡️ Open", key=f"clan_btn_{clan['tag']}"):
-                            st.session_state.selected_clan_tag = clan['tag']
-                            st.rerun()
                     st.markdown('</div>', unsafe_allow_html=True)
             show_pagination(total_pages, page, total, "clan_page")
         else:
